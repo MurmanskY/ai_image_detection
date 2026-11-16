@@ -44,6 +44,7 @@ class RIGID(BaseMethod):
     AI-Generated Image Detection (2024). 无需训练, 直接用 eval.py 评估。"""
 
     requires_training = False
+    score_type = "anomaly"
 
     def get_transform(self, train):
         return T.Compose([

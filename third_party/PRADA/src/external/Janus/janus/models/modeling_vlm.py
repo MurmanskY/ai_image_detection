@@ -187,6 +187,11 @@ class MultiModalityPreTrainedModel(PreTrainedModel):
     _no_split_modules = []
     _skip_keys_device_placement = "past_key_values"
 
+    @property
+    def all_tied_weights_keys(self):
+        # transformers>=4.57 在加载权重时查询该属性; Janus 无 tied weights 映射
+        return {}
+
 
 class MultiModalityCausalLM(MultiModalityPreTrainedModel):
     def __init__(self, config: MultiModalityConfig):

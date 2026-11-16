@@ -30,8 +30,10 @@ MGI/
 │   └── token_stats.py        # D³QE 核心统计分析 (codebook 频率/熵/量化误差)
 ├── scripts/                  # 数据组织与批跑脚本
 ├── docs/experiments.md       # 实验记录
-├── engine/                   # Trainer / evaluate / metrics (Acc, F1, AP, AUC)
+├── engine/                   # Trainer / evaluate / metrics
+│                             # (Acc, F1, balanced Acc, AP, AUC, TPR@0.1/1/5%FPR)
 ├── utils/                    # registry / config / logger / device (MPS 支持)
+├── splits/                   # 数据划分 manifest (path,label,generator,...)
 └── data/                     # 数据目录 (结构见 data/README.md)
 ```
 
@@ -86,9 +88,24 @@ python train.py --config configs/ours_ar.yaml --opts train.lr 5e-5 train.epochs 
   Infinity、Janus-Pro、RAR、Switti、Open-MAGVIT2 共 7 种 AR 模型。
   下载后用 `scripts/organize_arforensics.py` 组织目录（val 集重划分为 train/val，
   test 分卷按模型解压）。
+  **注意**: 当前 train/val 由官方 validation 重划分而来 (协议名
+  `ARForensics-small-val-derived`, 6k train + 1k val 每类)，并非官方
+  100k/100k 训练分卷，因此本仓库训练出的指标与 D³QE 论文数字不直接可比。
+  划分清单由 `scripts/make_manifest.py` 生成到 `splits/`。
 - 当前服务器运行环境: `/home/yuanyi/anaconda3/envs/pytorch_pj/bin/python`（torch 2.9.1 + CUDA）。
 - **DARG** (PRADA, CVPR Findings 2026): 155,000 张、20 种 AR 生成器；
   官方代码与预训练评分函数位于 `third_party/PRADA`。
+
+## 评估约定 (score contract)
+
+- 训练式方法 (`score_type="logit"`): 输出 BCE logit，评估时 `sigmoid` 后以 0.5 为阈值。
+- Training-free 异常分数方法 (`score_type="anomaly"`, 如 RIGID/ZED): 评估时
+  **不做 sigmoid**，直接对 raw score 计算 AUROC/AP/TPR@FPR; Acc/F1 使用在
+  **验证集上以 Youden's J 校准**的阈值（`eval.py` 自动执行），而非固定的 0.5。
+- 每次评估同时输出 `results_<split>.json` 与 `results_<split>_predictions.csv`
+  (逐样本 path/label/generator/score/prediction)，任意指标可离线重算。
+- `dataset.{train,val,test}_generators` 可按 generator 过滤样本，
+  用于 leave-one-generator-out 协议。
 
 ## 实验设计建议（论文用）
 

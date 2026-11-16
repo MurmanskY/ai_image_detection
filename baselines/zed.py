@@ -114,6 +114,7 @@ class ZED(BaseMethod):
     """ZED (ECCV 2024): 使用 SReC 的 NLL 与 Entropy 编码代价差检测生成图像。"""
 
     requires_training = False
+    score_type = "anomaly"
 
     def get_transform(self, train):
         size = self.cfg.get("image_size")

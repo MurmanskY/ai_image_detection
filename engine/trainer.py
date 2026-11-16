@@ -58,9 +58,9 @@ class Trainer:
                 score = metrics.get("ap", metrics["acc"])
                 if score > best:
                     best = score
-                    self._save("best.pth")
+                    self._save("best.pth", epoch=epoch, best=best)
             self.logger.info(msg)
-        self._save("last.pth")
+        self._save("last.pth", epoch=tcfg.epochs, best=best)
         self.logger.info(f"训练完成, best={best:.4f}, 权重保存在 {self.work_dir}")
 
     def _train_epoch(self, loader, epoch):
@@ -81,8 +81,29 @@ class Trainer:
             pbar.set_postfix(loss=f"{loss.item():.4f}")
         return total / max(n, 1)
 
-    def _save(self, name):
+    def _save(self, name, epoch=None, best=None):
+        git_commit = None
+        try:
+            import subprocess
+
+            git_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            ).stdout.strip() or None
+        except Exception:
+            pass
         torch.save(
-            {"model": self.model.state_dict(), "cfg": dict(self.cfg)},
+            {
+                "model": self.model.state_dict(),
+                "optimizer": self.optimizer.state_dict(),
+                "scheduler": self.scheduler.state_dict(),
+                "epoch": epoch,
+                "best_metric": best,
+                "cfg": dict(self.cfg),
+                "seed": self.cfg.get("seed", 42),
+                "git_commit": git_commit,
+                "torch_version": torch.__version__,
+                "cuda_version": torch.version.cuda,
+            },
             os.path.join(self.work_dir, name),
         )
