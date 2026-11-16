@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.ipynb_checkpoints/
+
+# Experiment outputs
+outputs/
+
+# Datasets
+data/
+/ARForensics/
+
+# Pretrained weights
+pretrained/
+
+# Third-party large weights / checkpoints
+third_party/PRADA/model_weights/
+third_party/DataProvenanceIAR/checkpoints/
+third_party/SReC/models/
+third_party/SReC/datasets/
+
+# Large binary artifacts anywhere
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.npz
+*.tar
+*.tar.gz
+*.zip

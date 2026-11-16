@@ -1,0 +1,23 @@
+seed: 42
+work_dir: outputs/cnn_detection_genimage
+
+dataset:
+  name: genimage
+  root: /path/to/GenImage   # TODO: 改为本地 GenImage 数据集路径
+  generators: all           # 或指定子集, 如 [Midjourney, VQDM]
+
+method:
+  name: cnn_detection
+  backbone: resnet50
+  pretrained: true
+
+train:
+  epochs: 20
+  batch_size: 64
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 8
+  amp: true
+
+eval:
+  batch_size: 128

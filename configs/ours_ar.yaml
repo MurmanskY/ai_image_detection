@@ -1,0 +1,22 @@
+seed: 42
+work_dir: outputs/ours_ar
+
+dataset:
+  name: folder
+  root: data/ar_images      # 自回归模型生成图像数据集, 结构见 data/README.md
+
+method:
+  name: ours
+  backbone: resnet50
+  pretrained: true
+
+train:
+  epochs: 30
+  batch_size: 64
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 8
+  amp: true
+
+eval:
+  batch_size: 128

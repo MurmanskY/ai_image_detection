@@ -1,0 +1,22 @@
+seed: 42
+work_dir: outputs/frequency_arforensics
+
+dataset:
+  name: arforensics
+  root: data/ARForensics
+
+method:
+  name: freq_spec
+  backbone: resnet18
+  pretrained: true
+
+train:
+  epochs: 5
+  batch_size: 64
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 4
+  amp: true
+
+eval:
+  batch_size: 64

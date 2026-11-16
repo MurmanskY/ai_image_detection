@@ -1,0 +1,23 @@
+seed: 42
+work_dir: outputs/lgrad_arforensics
+
+dataset:
+  name: arforensics
+  root: data/ARForensics
+
+method:
+  name: lgrad
+  checkpoint: pretrained/stylegan_bedroom256_discriminator.pth
+  backbone: resnet50
+  pretrained: true
+
+train:
+  epochs: 5
+  batch_size: 32
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 4
+  amp: true
+
+eval:
+  batch_size: 32

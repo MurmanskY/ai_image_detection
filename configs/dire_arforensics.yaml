@@ -1,0 +1,24 @@
+seed: 42
+work_dir: outputs/dire_arforensics
+
+dataset:
+  name: arforensics
+  root: data/ARForensics
+
+method:
+  name: dire
+  checkpoint: pretrained/256x256_diffusion_uncond.pt
+  backbone: resnet50
+  pretrained: true
+  steps: 20
+
+train:
+  epochs: 2
+  batch_size: 4
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 4
+  amp: false
+
+eval:
+  batch_size: 4
