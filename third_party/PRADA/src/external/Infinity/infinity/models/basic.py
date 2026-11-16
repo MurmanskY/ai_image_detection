@@ -21,7 +21,20 @@ try:
     from flash_attn import flash_attn_func                  # q, k, or v: BLHc, ret: BLHc
     from flash_attn import flash_attn_varlen_kvpacked_func  # qkv: N3Hc, ret: NHc
 except ImportError:
-    flash_attn_varlen_kvpacked_func = None
+    def flash_attn_varlen_kvpacked_func(
+        q, kv, cu_seqlens_q, cu_seqlens_k, max_seqlen_q=None, max_seqlen_k=None,
+        dropout_p=0.0, softmax_scale=None, **kwargs
+    ):
+        outputs = []
+        for i in range(len(cu_seqlens_q) - 1):
+            q_start, q_end = int(cu_seqlens_q[i]), int(cu_seqlens_q[i + 1])
+            k_start, k_end = int(cu_seqlens_k[i]), int(cu_seqlens_k[i + 1])
+            q_i = q[q_start:q_end].transpose(0, 1).unsqueeze(0)
+            k_i = kv[k_start:k_end, 0].transpose(0, 1).unsqueeze(0)
+            v_i = kv[k_start:k_end, 1].transpose(0, 1).unsqueeze(0)
+            out_i = slow_attn(q_i, k_i, v_i, dropout_p=dropout_p, scale=softmax_scale)
+            outputs.append(out_i.squeeze(0).transpose(0, 1))
+        return torch.cat(outputs, dim=0)
 
     def flash_attn_func(q, k, v, dropout_p=0.0, softmax_scale=None, **kwargs):
         q, k, v = (x.transpose(1, 2) for x in (q, k, v))

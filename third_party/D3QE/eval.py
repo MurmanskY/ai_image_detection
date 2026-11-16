@@ -49,6 +49,7 @@ def eval_model(model, opt, rows):
         )
         avg_acc += acc
         avg_ap += ap
+    opt.dataroot = cur_dataroot
     avg_acc /= len(cur_vals)
     avg_ap /= len(cur_vals)
     return avg_acc, avg_ap
