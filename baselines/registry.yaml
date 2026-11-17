@@ -1,0 +1,171 @@
+# Baseline Registry (deep-research-report-v2 §3.1)
+#
+# implementation_status 取值: vendored | integrated | reimplemented |
+#   faithful_reproduction | verified | lite | inspired
+# score_type: logit | probability | anomaly | similarity | distance
+# higher_is_fake: 进入公共 evaluator 前统一为 "越大越 fake"
+
+cnn_detection:
+  paper_title: "CNN-Generated Images Are Surprisingly Easy to Spot... for Now"
+  paper: "Wang et al., CVPR 2020"
+  paper_url: "https://arxiv.org/abs/1912.11035"
+  official_code_url: "https://github.com/PeterWang512/CNNDetection"
+  implementation_status: reimplemented
+  access_type: black_box
+  score_type: logit
+  higher_is_fake: true
+  requires_training: true
+  input_resolution: 224
+  preprocessing: "见 reproduction/cnn_detection.md"
+  note: "训练协议为 ARForensics-small-val-derived-v1, 非官方 ProGAN 训练集"
+
+freq_spec:
+  paper_title: "Leveraging Frequency Analysis for Deep Fake Image Recognition"
+  paper: "Frank et al., ICML 2020"
+  paper_url: "https://arxiv.org/abs/2003.08685"
+  official_code_url: "https://github.com/RUB-SysSec/GANCTDetection"
+  implementation_status: reimplemented
+  access_type: black_box
+  score_type: logit
+  higher_is_fake: true
+  requires_training: true
+  input_resolution: 224
+  preprocessing: "DCT 频谱 + 分类头, 见 reproduction/frequency.md"
+
+npr:
+  paper_title: "Rethinking the Up-Sampling Operations in CNN-Based Generative Network for Generalizable Deepfake Detection"
+  paper: "Tan et al., CVPR 2024"
+  paper_url: "https://arxiv.org/abs/2312.10561"
+  official_code_url: "https://github.com/chuangchuangtan/NPR-DeepfakeDetection"
+  implementation_status: inspired
+  access_type: black_box
+  score_type: logit
+  higher_is_fake: true
+  requires_training: true
+  input_resolution: 224
+  preprocessing: "x - nearest_up(nearest_down(x)) 残差 ×4 + ResNet, 为简化版, 见 reproduction/npr.md"
+  note: "简化实现, 不能与官方 NPR 结果直接比较"
+
+univfd:
+  paper_title: "Towards Universal Fake Image Detectors That Generalize Across Generative Models"
+  paper: "Ojha et al., CVPR 2023"
+  paper_url: "https://arxiv.org/abs/2302.10174"
+  official_code_url: "https://github.com/WisconsinAIVision/UniversalFakeDetect"
+  implementation_status: faithful_reproduction
+  access_type: black_box
+  score_type: logit
+  higher_is_fake: true
+  requires_training: true
+  input_resolution: 224
+  preprocessing: "冻结 CLIP ViT-L/14 + 线性头 (fix_backbone), 见 reproduction/univfd.md"
+  note: "结构对齐官方线性 probing 配置; 训练数据为 ARForensics-small-val-derived-v1"
+
+rigid:
+  paper_title: "RIGID: A Training-free and Model-Agnostic Framework for Robust AI-Generated Image Detection"
+  paper: "He et al., 2024"
+  paper_url: "https://arxiv.org/abs/2405.20112"
+  official_code_url: "https://github.com/IBM/RIGID"
+  implementation_status: reimplemented
+  access_type: black_box
+  score_type: anomaly
+  higher_is_fake: true
+  requires_training: false
+  input_resolution: 224
+  preprocessing: "DINOv2 特征, 原图 vs 加噪图余弦相似度, logit = -sim * scale, 见 reproduction/rigid.md"
+  note: "阈值为验证集 Youden's J 校准; AUROC/AP 与阈值无关"
+
+zed:
+  paper_title: "Zero-Shot Detection of AI-Generated Images"
+  paper: "Cozzolino et al., ECCV 2024"
+  paper_url: "https://arxiv.org/abs/2312.01588"
+  official_code_url: "https://github.com/grip-unina/ZED"
+  implementation_status: reimplemented
+  access_type: black_box
+  score_type: anomaly
+  higher_is_fake: true
+  requires_training: false
+  input_resolution: null
+  preprocessing: "SReC 多分辨率概率模型, NLL-entropy gap (默认 abs_delta01), 见 reproduction/zed.md"
+  note: "使用官方 SReC checkpoint; 测试为每类 500 张采样子集"
+
+d3qe_lite:
+  paper_title: "D3QE: Learning Discrete Distribution Discrepancy-aware Quantization Error for Autoregressive-Generated Image Detection"
+  paper: "Zhang et al., ICCV 2025"
+  paper_url: "https://openaccess.thecvf.com/content/ICCV2025/html/Zhang_D3QE_Learning_Discrete_Distribution_Discrepancy-aware_Quantization_Error_for_Autoregressive-Generated_Image_ICCV_2025_paper.html"
+  official_code_url: "https://github.com/Zhangyr2022/D3QE"
+  implementation_status: lite
+  access_type: black_box
+  score_type: logit
+  higher_is_fake: true
+  requires_training: true
+  input_resolution: 256
+  preprocessing: "LlamaGen VQ token histogram + 4 标量 + MLP, 见 reproduction/d3qe.md"
+  note: "明确简化版本: 无 D3-Attention / semantic fusion; 官方完整版见 third_party/D3QE"
+
+d3qe_official:
+  paper_title: "D3QE: Learning Discrete Distribution Discrepancy-aware Quantization Error for Autoregressive-Generated Image Detection"
+  paper: "Zhang et al., ICCV 2025"
+  official_code_url: "https://github.com/Zhangyr2022/D3QE"
+  implementation_status: vendored
+  access_type: black_box
+  score_type: logit
+  higher_is_fake: true
+  requires_training: true
+  input_resolution: 256
+  preprocessing: "官方代码 third_party/D3QE 直接运行, 含主测试与 JPEG/crop 鲁棒性"
+  note: "官方脚本运行, 未接入统一 eval.py; 结果在 third_party/D3QE/results/"
+
+prada:
+  paper_title: "PRADA: Probability-Ratio-Based Attribution and Detection of Autoregressive-Generated Images"
+  paper: "Ricker et al., CVPR Findings 2026"
+  paper_url: "https://arxiv.org/abs/2511.20068"
+  official_code_url: "https://github.com/jonasricker/prada"
+  implementation_status: vendored
+  access_type: white_box
+  score_type: anomaly
+  higher_is_fake: true
+  requires_training: false
+  input_resolution: null
+  preprocessing: "官方 predict.py + 官方 prada_weights/model_weights, 见 reproduction/prada.md"
+  note: "官方代码直接运行; T2I real 为 ARForensics 替代 RAISE-1k, C2I real 为 HF ImageNet 镜像子集 (协议偏差已记录)"
+
+data_provenance:
+  paper_title: "Data Provenance for Image Auto-Regressive Generation"
+  paper: "ICLR 2026"
+  paper_url: "https://proceedings.iclr.cc/paper_files/paper/2026/hash/5a1667459d0cdeb2fe6b2f0dffc5cb9d-Abstract-Conference.html"
+  official_code_url: "UNKNOWN"
+  implementation_status: vendored
+  access_type: white_box
+  score_type: distance
+  higher_is_fake: true
+  requires_training: false
+  input_resolution: null
+  preprocessing: "官方代码 third_party/DataProvenanceIAR, 见 reproduction/data_provenance.md"
+
+dire:
+  paper_title: "DIRE for Diffusion-Generated Image Detection"
+  paper: "Wang et al., ICCV 2023"
+  paper_url: "https://arxiv.org/abs/2303.09295"
+  official_code_url: "https://github.com/ZhendongWang6/DIRE"
+  implementation_status: reimplemented
+  access_type: black_box
+  score_type: logit
+  higher_is_fake: true
+  requires_training: true
+  input_resolution: 256
+  preprocessing: "20-step DDIM 反演重建残差 + ResNet50, 见 reproduction/dire.md"
+  note: "architecture_specific (Diffusion): 在 AR 上属于迁移测试; 官方为完整 DDIM, 此处 20 步近似"
+
+lgrad:
+  paper_title: "Learning on Gradients: Generalized Artifacts Representation for GAN-Generated Images Detection"
+  paper: "Tan et al., CVPR 2023"
+  paper_url: "https://arxiv.org/abs/2211.17415"
+  official_code_url: "https://github.com/chuangchuangtan/LGrad-DeepfakeDetection"
+  implementation_status: reimplemented
+  access_type: black_box
+  score_type: logit
+  higher_is_fake: true
+  requires_training: true
+  input_resolution: 224
+  preprocessing: "预训练 CNN 梯度幅值 + 分类头, 见 reproduction/lgrad.md"
+  note: "architecture_specific (GAN): 在 AR 上属于迁移测试"

@@ -1,0 +1,14 @@
+{
+  "python": "3.12.12",
+  "platform": "Linux-6.16.12+deb14+1-amd64-x86_64-with-glibc2.41",
+  "torch": "2.9.1+cu128",
+  "cuda": "12.8",
+  "cudnn": 91002,
+  "gpu": [
+    "NVIDIA GeForce RTX 5090",
+    "NVIDIA GeForce RTX 5090"
+  ],
+  "torchvision": "0.24.1+cu128",
+  "numpy": "2.3.1",
+  "sklearn": "1.8.0"
+}

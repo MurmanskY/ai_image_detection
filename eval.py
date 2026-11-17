@@ -25,6 +25,8 @@ def main():
     parser.add_argument("--out", default=None, help="结果 json 保存路径")
     parser.add_argument("--threshold", type=float, default=None,
                         help="决策阈值; 缺省时 logit 方法用 0.5, anomaly 方法在 val 上校准")
+    parser.add_argument("--n_boot", type=int, default=0,
+                        help=">0 时对 overall 指标计算 bootstrap 95%% CI")
     parser.add_argument("--opts", nargs="*", default=None, help="覆盖配置项")
     args = parser.parse_args()
 
@@ -68,7 +70,7 @@ def main():
     from engine.metrics import compute_metrics
 
     labels, scores, gens, paths = predict_scores(model, loader, device, amp, method)
-    results = {"overall": compute_metrics(labels, scores, threshold)}
+    results = {"overall": compute_metrics(labels, scores, threshold, n_boot=args.n_boot)}
     per_gen = defaultdict(lambda: ([], []))
     for l, s, g in zip(labels, scores, gens):
         per_gen[g][0].append(l)

@@ -1,0 +1,23 @@
+seed: 42
+work_dir: outputs/zed_arforensics
+
+dataset:
+  name: arforensics
+  root: data/ARForensics
+
+method:
+  name: zed
+  image_size: null
+  crop_size: 256
+  statistic: abs_delta01
+  entropy_chunk: 16
+
+train:
+  epochs: 0
+  batch_size: 1
+  lr: 0.0
+  num_workers: 2
+  amp: false
+
+eval:
+  batch_size: 1

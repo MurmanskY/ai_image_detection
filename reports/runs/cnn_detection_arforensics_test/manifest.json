@@ -1,0 +1,14 @@
+{
+  "run_id": "cnn_detection_arforensics_test",
+  "git_commit": "15bfcc206786ffbc2d4d430472b828312300aa4e",
+  "method": "cnn_detection",
+  "split": "test",
+  "seed": null,
+  "checkpoint": "best.pth",
+  "checkpoint_sha256": "41ab9d10b81286bd5ab14c8b50abac8e6991ae0588c8f8e155107f58f48cc865",
+  "sample_count": null,
+  "dataset_manifest": null,
+  "dataset_manifest_sha256": null,
+  "archived_at": "2026-11-17T01:39:44.057085+00:00",
+  "python": "3.12.12"
+}

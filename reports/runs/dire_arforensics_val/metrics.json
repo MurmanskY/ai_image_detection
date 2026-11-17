@@ -1,0 +1,26 @@
+{
+  "overall": {
+    "acc": 0.933,
+    "f1": 0.9344422700587084,
+    "balanced_acc": 0.933,
+    "threshold": 0.5,
+    "ap": 0.9818431828699886,
+    "auc": 0.9789939999999999,
+    "tpr@0.001fpr": 0.543,
+    "tpr@0.01fpr": 0.825,
+    "tpr@0.05fpr": 0.93
+  },
+  "real": {
+    "acc": 0.911,
+    "f1": 0.0,
+    "balanced_acc": 0.911,
+    "threshold": 0.5
+  },
+  "LlamaGen": {
+    "acc": 0.955,
+    "f1": 0.9769820971867008,
+    "balanced_acc": 0.955,
+    "threshold": 0.5
+  },
+  "score_type": "logit"
+}

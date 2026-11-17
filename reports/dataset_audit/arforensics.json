@@ -1,0 +1,445 @@
+{
+  "manifest_rows": 98000,
+  "checks": {
+    "duplicate_paths": {
+      "count": 0,
+      "examples": {}
+    },
+    "labels": {
+      "invalid_count": 0,
+      "examples": []
+    },
+    "generator_metadata": {
+      "invalid_count": 0,
+      "examples": []
+    },
+    "exact_duplicates": {
+      "duplicate_groups": 17,
+      "cross_split_groups": 3,
+      "cross_split_examples": {
+        "f3062b949da66bc71f91e1a6244dbe42894b45e530cf596fd8a0212e9029c120": [
+          [
+            "train",
+            "train/0_real/ILSVRC2012_val_00005267.JPEG"
+          ],
+          [
+            "test",
+            "test/Switti/0_real/ILSVRC2012_test_00058282.JPEG"
+          ]
+        ],
+        "e7408dd841a4bb843adf679e853ab70ec68e4b5548f995d75b7fb14ca8727aa3": [
+          [
+            "train",
+            "train/0_real/ILSVRC2012_val_00019979.JPEG"
+          ],
+          [
+            "test",
+            "test/LlamaGen/0_real/ILSVRC2012_test_00029545.JPEG"
+          ]
+        ],
+        "6adbfd5183d1e34d35b8c2d25a95e26aa4a520827d3aea12ffa5c060db8b44a9": [
+          [
+            "train",
+            "train/0_real/ILSVRC2012_val_00020432.JPEG"
+          ],
+          [
+            "test",
+            "test/Infinity/0_real/ILSVRC2012_test_00064703.JPEG"
+          ]
+        ]
+      }
+    },
+    "near_duplicates": {
+      "phash_threshold": 8,
+      "candidate_pairs": 1238,
+      "note": "pHash 相似不直接等同重复, 候选对需人工复核",
+      "examples": [
+        {
+          "a": "test/Janus_Pro/1_fake/class_236_0.png",
+          "b": "test/Janus_Pro/1_fake/class_236_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_236_2.png",
+          "b": "test/Janus_Pro/1_fake/class_236_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_4.png",
+          "b": "test/Janus_Pro/1_fake/class_139_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "train/1_fake/class_112_sample_18.png",
+          "b": "train/1_fake/class_510_sample_10.png",
+          "split_a": "train",
+          "split_b": "train",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_917_1.png",
+          "b": "test/Janus_Pro/1_fake/class_917_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Infinity/1_fake/class_172_5.png",
+          "b": "test/Infinity/1_fake/class_188_0.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "train/0_real/ILSVRC2012_val_00020432.JPEG",
+          "b": "test/Infinity/0_real/ILSVRC2012_test_00064703.JPEG",
+          "split_a": "train",
+          "split_b": "test",
+          "hamming": 0
+        },
+        {
+          "a": "test/Open_MAGVIT2/0_real/ILSVRC2012_test_00047538.JPEG",
+          "b": "test/Switti/0_real/ILSVRC2012_test_00085992.JPEG",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Infinity/1_fake/class_14_5.png",
+          "b": "test/RAR/0_real/ILSVRC2012_test_00094098.JPEG",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Open_MAGVIT2/1_fake/class_86_sample_0.png",
+          "b": "test/RAR/0_real/ILSVRC2012_test_00088975.JPEG",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_783_0.png",
+          "b": "test/Janus_Pro/1_fake/class_783_2.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Infinity/1_fake/class_140_1.png",
+          "b": "test/Infinity/1_fake/class_140_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "train/0_real/ILSVRC2012_val_00009626.JPEG",
+          "b": "test/Open_MAGVIT2/1_fake/class_314_sample_4.png",
+          "split_a": "train",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_142_1.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_142_2.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 2
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_142_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 2
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_142_4.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_142_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_16_1.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_17_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_17_4.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_139_0.png",
+          "b": "test/Janus_Pro/1_fake/class_17_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_140_5.png",
+          "b": "test/Janus_Pro/1_fake/class_142_2.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_140_5.png",
+          "b": "test/Janus_Pro/1_fake/class_16_1.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_1.png",
+          "b": "test/Janus_Pro/1_fake/class_142_2.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_1.png",
+          "b": "test/Janus_Pro/1_fake/class_142_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_1.png",
+          "b": "test/Janus_Pro/1_fake/class_142_4.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_1.png",
+          "b": "test/Janus_Pro/1_fake/class_142_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_1.png",
+          "b": "test/Janus_Pro/1_fake/class_16_1.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_1.png",
+          "b": "test/Janus_Pro/1_fake/class_17_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_1.png",
+          "b": "test/Janus_Pro/1_fake/class_17_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_2.png",
+          "b": "test/Janus_Pro/1_fake/class_142_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_2.png",
+          "b": "test/Janus_Pro/1_fake/class_142_4.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_2.png",
+          "b": "test/Janus_Pro/1_fake/class_142_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_2.png",
+          "b": "test/Janus_Pro/1_fake/class_16_1.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_2.png",
+          "b": "test/Janus_Pro/1_fake/class_17_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_2.png",
+          "b": "test/Janus_Pro/1_fake/class_17_4.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_2.png",
+          "b": "test/Janus_Pro/1_fake/class_17_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_3.png",
+          "b": "test/Janus_Pro/1_fake/class_142_4.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 2
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_3.png",
+          "b": "test/Janus_Pro/1_fake/class_142_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_3.png",
+          "b": "test/Janus_Pro/1_fake/class_16_1.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_3.png",
+          "b": "test/Janus_Pro/1_fake/class_17_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_3.png",
+          "b": "test/Janus_Pro/1_fake/class_17_4.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_3.png",
+          "b": "test/Janus_Pro/1_fake/class_17_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_4.png",
+          "b": "test/Janus_Pro/1_fake/class_142_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_4.png",
+          "b": "test/Janus_Pro/1_fake/class_16_1.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_4.png",
+          "b": "test/Janus_Pro/1_fake/class_17_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 4
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_4.png",
+          "b": "test/Janus_Pro/1_fake/class_17_4.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 8
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_4.png",
+          "b": "test/Janus_Pro/1_fake/class_17_5.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        },
+        {
+          "a": "test/Janus_Pro/1_fake/class_142_5.png",
+          "b": "test/Janus_Pro/1_fake/class_17_3.png",
+          "split_a": "test",
+          "split_b": "test",
+          "hamming": 6
+        }
+      ]
+    }
+  },
+  "counts": {
+    "by_split": {
+      "train": 12000,
+      "val": 2000,
+      "test": 84000
+    },
+    "by_split_label": {
+      "test/0": 42000,
+      "test/1": 42000,
+      "train/0": 6000,
+      "train/1": 6000,
+      "val/0": 1000,
+      "val/1": 1000
+    },
+    "by_split_generator": {
+      "test/Infinity": 6000,
+      "test/Janus_Pro": 6000,
+      "test/LlamaGen": 6000,
+      "test/Open_MAGVIT2": 6000,
+      "test/RAR": 6000,
+      "test/Switti": 6000,
+      "test/VAR": 6000,
+      "test/real": 42000,
+      "train/LlamaGen": 6000,
+      "train/real": 6000,
+      "val/LlamaGen": 1000,
+      "val/real": 1000
+    }
+  },
+  "formats": {
+    "extensions": {
+      ".jpeg": 49000,
+      ".png": 49000
+    }
+  }
+}

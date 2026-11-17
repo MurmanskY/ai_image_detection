@@ -25,7 +25,28 @@ def calibrate_threshold(labels, scores):
     return float(thresholds[int(np.argmax(j))])
 
 
-def compute_metrics(labels, scores, threshold=0.5):
+def bootstrap_ci(labels, scores, metric_fn, n_boot=1000, seed=42):
+    """以样本为单位的 bootstrap 95% CI。
+
+    metric_fn(labels, scores) -> float。返回 (lo, hi)。
+    样本数过少或重采样后只剩单一类别时跳过该次重采样。
+    """
+    labels = np.asarray(labels)
+    scores = np.asarray(scores)
+    rng = np.random.default_rng(seed)
+    n = len(labels)
+    vals = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, n, n)
+        if len(np.unique(labels[idx])) < 2:
+            continue
+        vals.append(metric_fn(labels[idx], scores[idx]))
+    if not vals:
+        return float("nan"), float("nan")
+    return float(np.percentile(vals, 2.5)), float(np.percentile(vals, 97.5))
+
+
+def compute_metrics(labels, scores, threshold=0.5, n_boot=0):
     """labels: 0/1 数组; scores: 越大越倾向 fake 的分数。
 
     acc/f1/balanced_acc 使用给定阈值; ap/auc/tpr@fpr 与阈值无关。
@@ -45,4 +66,9 @@ def compute_metrics(labels, scores, threshold=0.5):
         for target in FPR_TARGETS:
             key = f"tpr@{target:g}fpr"
             out[key] = tpr_at_fpr(labels, scores, target)
+        if n_boot > 0:
+            out["auc_ci95"] = bootstrap_ci(labels, scores, roc_auc_score, n_boot)
+            out["ap_ci95"] = bootstrap_ci(labels, scores, average_precision_score, n_boot)
+            out["tpr@0.01fpr_ci95"] = bootstrap_ci(
+                labels, scores, lambda l, s: tpr_at_fpr(l, s, 0.01), n_boot)
     return out

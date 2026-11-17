@@ -1,0 +1,14 @@
+{
+  "run_id": "rigid_arforensics_test",
+  "git_commit": "15bfcc206786ffbc2d4d430472b828312300aa4e",
+  "method": "rigid",
+  "split": "test",
+  "seed": null,
+  "checkpoint": null,
+  "checkpoint_sha256": null,
+  "sample_count": 84000,
+  "dataset_manifest": null,
+  "dataset_manifest_sha256": null,
+  "archived_at": "2026-11-17T01:39:49.243023+00:00",
+  "python": "3.12.12"
+}

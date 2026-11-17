@@ -1,0 +1,14 @@
+{
+  "run_id": "univfd_arforensics_test",
+  "git_commit": "15bfcc206786ffbc2d4d430472b828312300aa4e",
+  "method": "univfd",
+  "split": "test",
+  "seed": null,
+  "checkpoint": "best.pth",
+  "checkpoint_sha256": "71cab368c86979dcd2071450e312b3d4e7937011c5225416ab2ba1cdaa2de411",
+  "sample_count": null,
+  "dataset_manifest": null,
+  "dataset_manifest_sha256": null,
+  "archived_at": "2026-11-17T01:39:48.789585+00:00",
+  "python": "3.12.12"
+}

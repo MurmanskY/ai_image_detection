@@ -43,10 +43,13 @@ def predict_scores(model, loader, device, amp=True, method=None):
 
 
 @torch.no_grad()
-def evaluate(model, loader, device, amp=True, method=None, threshold=0.5):
-    """返回 dict: overall 指标 + 每个 generator 的细分指标。"""
+def evaluate(model, loader, device, amp=True, method=None, threshold=0.5, n_boot=0):
+    """返回 dict: overall 指标 + 每个 generator 的细分指标。
+
+    n_boot > 0 时对 overall 额外输出 bootstrap 95% CI。
+    """
     labels, scores, all_gens, _ = predict_scores(model, loader, device, amp, method)
-    results = {"overall": compute_metrics(labels, scores, threshold)}
+    results = {"overall": compute_metrics(labels, scores, threshold, n_boot=n_boot)}
 
     per_gen = defaultdict(lambda: ([], []))
     for l, s, g in zip(labels, scores, all_gens):

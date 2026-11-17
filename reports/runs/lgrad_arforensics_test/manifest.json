@@ -1,0 +1,14 @@
+{
+  "run_id": "lgrad_arforensics_test",
+  "git_commit": "15bfcc206786ffbc2d4d430472b828312300aa4e",
+  "method": "lgrad",
+  "split": "test",
+  "seed": null,
+  "checkpoint": "best.pth",
+  "checkpoint_sha256": "3c906b7b3f2bba16b7b4111c41b4d758bdc83fa6e8a6c6a47ad9693f02729020",
+  "sample_count": null,
+  "dataset_manifest": null,
+  "dataset_manifest_sha256": null,
+  "archived_at": "2026-11-17T01:39:45.563692+00:00",
+  "python": "3.12.12"
+}

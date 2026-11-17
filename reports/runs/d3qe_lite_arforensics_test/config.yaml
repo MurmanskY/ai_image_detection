@@ -1,0 +1,21 @@
+seed: 42
+work_dir: outputs/d3qe_lite_arforensics
+
+dataset:
+  name: arforensics
+  root: data/ARForensics
+
+method:
+  name: d3qe_lite
+  vq_ckpt: pretrained/vq_ds16_c2i.pt
+
+train:
+  epochs: 5
+  batch_size: 32
+  lr: 1.0e-3        # VQ 冻结, 只训练 hist_proj + MLP
+  weight_decay: 1.0e-4
+  num_workers: 4
+  amp: true
+
+eval:
+  batch_size: 32
