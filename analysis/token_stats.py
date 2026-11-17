@@ -9,8 +9,8 @@
   - per-image 特征导出 CSV (供后续统计显著性分析 / logistic regression)
 
 用法:
-  python analysis/token_stats.py \\
-      --root data/ARForensics --split test --models LlamaGen VAR \\
+  python analysis/token_stats.py \
+      --root data/ARForensics --split test --models LlamaGen VAR \
       --vq_ckpt pretrained/vq_ds16_c2i.pt --n 500 --out outputs/analysis
 """
 
