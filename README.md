@@ -4,8 +4,10 @@
 支持多种数据集与多种鉴别方法的统一训练/评估，目标是让任何研究者都能依据
 仓库中的配置、数据清单和逐样本预测，独立重算并核验报告的实验结果。
 
-冻结的实验结果总表见 **`reports/RESULTS.md`**；各方法复现细节与协议偏差见
-`baselines/reproduction/`；数据审计报告见 `reports/dataset_audit/`。
+冻结的实验结果总表见 **`reports/RESULTS.md`**；完整实验报告（实验设计、
+方法差异、结果细节与可信度分层）见 **`docs/experiments.md`**；
+各方法复现细节与协议偏差见 `baselines/reproduction/`；
+数据审计报告见 `reports/dataset_audit/`。
 
 ## 目录结构
 
@@ -88,7 +90,7 @@ python scripts/archive_run.py --run_id <run_id> --config <cfg> \
 | CNNDetection (ResNet-50) | CVPR 2020 | reimplemented | test acc 0.699 / AUC 0.819 |
 | FreqSpec (log 幅度谱) | ICML 2020 | reimplemented | test acc 0.660 / AUC 0.786 |
 | NPR (邻域像素关系) | CVPR 2024 | inspired 简化版 | test acc 0.748 / AUC 0.860 |
-| UnivFD (CLIP ViT-L/14 + 线性头) | CVPR 2023 | faithful_reproduction | test acc 0.802 / AUC 0.913 |
+| UnivFD (CLIP ViT-L/14 + 线性头) | CVPR 2023 | reimplemented (架构忠实, 协议适配) | test acc 0.802 / AUC 0.913 |
 | LGrad (梯度特征) | CVPR 2023 | reimplemented, GAN 迁移测试 | test acc 0.713 / AUC 0.834 |
 | DIRE (DDIM 重建误差) | ICCV 2023 | reimplemented, Diffusion 迁移测试 | val acc 0.933; test sub500 acc 0.743 |
 | RIGID (DINOv2 扰动敏感性) | 2024 | reimplemented, training-free | 校准阈值 acc 0.675 / AUC 0.741 |
@@ -123,12 +125,33 @@ python scripts/archive_run.py --run_id <run_id> --config <cfg> \
   (`score_type="anomaly"`, 如 RIGID/ZED) 直接用 raw score，不做 sigmoid。
 - Acc/F1 等阈值指标：logit 方法用 0.5；anomaly 方法在**验证集**上以
   Youden's J 校准阈值后冻结（`eval.py` 自动执行），绝不在 test 上调阈值。
-- 排序指标（AUROC/AP/TPR@FPR）一律基于连续分数，`--n_boot` 可输出
-  bootstrap 95% CI。
+- 排序指标（AUROC/AP/TPR@FPR/FPR@95%TPR）一律基于连续分数（离散 ROC，不插值）；
+  `--n_boot` 输出**分层 bootstrap** 95% CI（保持类别比例）。
 - 每次评估同时输出 `results_<split>.json` 与 `results_<split>_predictions.csv`
   （逐样本 path/label/generator/score/prediction），任意指标可离线重算。
 - `dataset.{train,val,test}_generators` 可按 generator 过滤样本，
   用于 leave-one-generator-out 协议。
+
+## 数据完整性与格式混杂控制
+
+- **clean manifest**：审计发现 3 组跨 train/test 的 sha256 精确重复
+  （ImageNet 内容重复），已剔除并生成 `data/manifests/arforensics_clean.csv`；
+  正式结果必须基于 clean manifest。
+- **格式混杂**：ARForensics real 100% JPEG、fake 100% PNG。统一 JPEG95
+  重编码对照（`scripts/format_bias_report.py` + `data/ARForensics_reencode`）
+  显示 UnivFD AUC 0.953→0.889——约 6 个 AUC 点来自格式捷径，主表须同时
+  报告原始与重编码两组结果（详见 `reports/RESULTS.md` §8.1）。
+
+## 复现 taxonomy
+
+每个 baseline 在 `baselines/registry.yaml` 中以四个正交字段标注：
+
+- `code_origin`: official | reimplementation | inspired
+- `architecture_fidelity`: exact | faithful | approximate
+- `protocol_fidelity`: official | adapted | partial | transfer
+- `verification_status`: unverified | runs | matched_reference
+
+架构对齐 ≠ 论文复现；协议有偏差的结果一律标注 adapted/transfer。
 
 ## 当前研究结论摘要
 
