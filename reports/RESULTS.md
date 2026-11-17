@@ -22,6 +22,8 @@
 | RIGID | FROZEN | 0.675 | 0.655 | 0.7421 | 0.7407 | 0.0997 | 阈值 -9.914 (Youden's J)；有 predictions.csv |
 | ZED | FROZEN | 0.564 | 0.483 | 0.5639 | 0.5806 | 0.015 | 阈值 0.0451；**每类 500 采样子集** |
 
+注：ZED 每类仅 500 张，1%FPR 对应 5 个负样本、0.1%FPR 不足 1 个——其 `TPR@0.1%FPR` 无统计解释力，`TPR@1%FPR` 也须连同 N_real=500 一并解读，不能与 6000/42000 负样本的方法直接并列。
+
 修正前 sigmoid+0.5 阈值下 RIGID/ZED 的 Acc/F1 无效，已从报告中移除；AUROC/AP 不受单调变换影响。
 
 ## 3. D³QE 官方代码（third_party/D3QE）
@@ -87,6 +89,32 @@
 - 输出：`outputs/analysis_test_v2/`（token_stats_summary.json + per_image_features.csv + token_stats.png）
 - 结论：单变量 token 统计（entropy/gini/transition/q-error）在 7 个生成器上 AUC 0.37–0.63 且方向跨生成器不一致 → bag-of-tokens 统计受 tokenizer affinity 影响，不能单独作为通用 AR 指纹
 - 状态：FROZEN
+
+## 8.1 格式/压缩偏差与统一重编码对照（v3 P1-D）
+
+**发现**：ARForensics real 100% 为 JPEG（48,997 张），7 个生成器的 fake 100% 为 PNG
+（`reports/dataset_audit/format_bias_arforensics.json`）。检测器可能利用
+"JPEG vs PNG" 的格式痕迹而非生成痕迹——这是必须控制的混杂因素。
+
+**对照实验**（UnivFD，同一 500/类 采样协议，7000 张）：
+把所有图片统一 decode→RGB→JPEG Q95 重编码（`data/ARForensics_reencode`）后重评估：
+
+| 指标 | 原始（JPEG real / PNG fake） | 统一 JPEG95 后 | Δ |
+|---|---|---|---|
+| overall AUC | 0.9530 | 0.8893 | **-0.064** |
+| overall acc | 0.8614 | 0.7414 | -0.120 |
+| real acc | 0.9260 | 0.9454 | +0.019 |
+
+解读：格式统一后 AUC 仍达 0.889，说明 UnivFD 大部分判别力来自生成痕迹而非纯格式捷径；
+但约 6 个 AUC 点的差距表明显式格式混杂确实抬高了原始数字。
+**后续 benchmark 主表应同时报告原始与统一重编码两组结果。**
+
+## 8.2 跨 split 泄漏清理（v3 P0-B）
+
+数据审计发现的 3 组 train/test 精确重复已按 sha256 剔除（保留 test 侧，删除 train 侧），
+生成 `data/manifests/arforensics_clean.csv`（97,997 行）与
+`data/manifests/leakage_exclusions.csv`。注意：已冻结结果是在清理前数据上得到的，
+3/98,000 的泄漏对指标影响可忽略，但正式论文结果必须基于 clean manifest。
 
 ## 8. 数据审计
 

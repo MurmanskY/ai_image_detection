@@ -10,7 +10,12 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from engine.metrics import calibrate_threshold, compute_metrics, tpr_at_fpr  # noqa: E402
+from engine.metrics import (  # noqa: E402
+    calibrate_threshold,
+    compute_metrics,
+    fpr_at_tpr,
+    tpr_at_fpr,
+)
 
 
 def _toy():
@@ -74,3 +79,34 @@ def test_single_class_graceful():
     m = compute_metrics(labels, scores)
     assert "auc" not in m
     assert "acc" in m
+
+
+def test_fpr_at_tpr_manual():
+    # 完美区分时 FPR@95%TPR 应为 0
+    labels = np.array([0, 0, 1, 1])
+    scores = np.array([0.1, 0.2, 0.8, 0.9])
+    assert fpr_at_tpr(labels, scores, 0.95) == 0.0
+    # 随机分数时 FPR@95%TPR 应较高
+    rng = np.random.default_rng(0)
+    labels = np.array([0] * 200 + [1] * 200)
+    scores = rng.normal(size=400)
+    v = fpr_at_tpr(labels, scores, 0.95)
+    assert 0.5 < v <= 1.0
+
+
+def test_fpr_at_tpr_in_compute_metrics():
+    labels = np.array([0, 0, 1, 1])
+    scores = np.array([0.1, 0.2, 0.8, 0.9])
+    m = compute_metrics(labels, scores)
+    assert "fpr@0.95tpr" in m
+    assert m["fpr@0.95tpr"] == 0.0
+
+
+def test_bootstrap_stratified_keeps_class_ratio():
+    from engine.metrics import bootstrap_ci
+    # 极度不平衡时 stratified bootstrap 每次重采样都应含两类, 不会被跳过
+    labels = np.array([0] * 95 + [1] * 5)
+    scores = np.linspace(0, 1, 100)
+    lo, hi = bootstrap_ci(labels, scores, roc_auc_score, n_boot=50)
+    assert not np.isnan(lo) and not np.isnan(hi)
+    assert lo <= hi

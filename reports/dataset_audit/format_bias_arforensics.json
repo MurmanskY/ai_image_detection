@@ -1,0 +1,221 @@
+{
+  "real:real": {
+    "n_total": 48997,
+    "extensions": {
+      ".jpeg": 48997
+    },
+    "decoded_formats_sampled": {
+      "JPEG": 500
+    },
+    "color_modes_sampled": {
+      "RGB": 489,
+      "L": 11
+    },
+    "n_size_measured": 48997,
+    "file_size_bytes": {
+      "min": 956,
+      "median": 127357,
+      "max": 9528844
+    },
+    "n_dims_sampled": 500,
+    "widths": [
+      194,
+      200,
+      225,
+      229,
+      232,
+      262,
+      264,
+      280,
+      302,
+      304
+    ],
+    "heights": [
+      116,
+      156,
+      200,
+      225,
+      235,
+      251,
+      266,
+      280,
+      282,
+      285
+    ]
+  },
+  "fake:Infinity": {
+    "n_total": 6000,
+    "extensions": {
+      ".png": 6000
+    },
+    "decoded_formats_sampled": {
+      "PNG": 500
+    },
+    "color_modes_sampled": {
+      "RGB": 500
+    },
+    "n_size_measured": 6000,
+    "file_size_bytes": {
+      "min": 530294,
+      "median": 1346923,
+      "max": 2458370
+    },
+    "n_dims_sampled": 500,
+    "widths": [
+      1024
+    ],
+    "heights": [
+      1024
+    ]
+  },
+  "fake:Janus_Pro": {
+    "n_total": 6000,
+    "extensions": {
+      ".png": 6000
+    },
+    "decoded_formats_sampled": {
+      "PNG": 500
+    },
+    "color_modes_sampled": {
+      "RGB": 500
+    },
+    "n_size_measured": 6000,
+    "file_size_bytes": {
+      "min": 100321,
+      "median": 207929,
+      "max": 366864
+    },
+    "n_dims_sampled": 500,
+    "widths": [
+      384
+    ],
+    "heights": [
+      384
+    ]
+  },
+  "fake:LlamaGen": {
+    "n_total": 13000,
+    "extensions": {
+      ".png": 13000
+    },
+    "decoded_formats_sampled": {
+      "PNG": 500
+    },
+    "color_modes_sampled": {
+      "RGB": 500
+    },
+    "n_size_measured": 13000,
+    "file_size_bytes": {
+      "min": 39650,
+      "median": 237418,
+      "max": 408072
+    },
+    "n_dims_sampled": 500,
+    "widths": [
+      384
+    ],
+    "heights": [
+      384
+    ]
+  },
+  "fake:Open_MAGVIT2": {
+    "n_total": 6000,
+    "extensions": {
+      ".png": 6000
+    },
+    "decoded_formats_sampled": {
+      "PNG": 500
+    },
+    "color_modes_sampled": {
+      "RGB": 500
+    },
+    "n_size_measured": 6000,
+    "file_size_bytes": {
+      "min": 26982,
+      "median": 111691,
+      "max": 180561
+    },
+    "n_dims_sampled": 500,
+    "widths": [
+      256
+    ],
+    "heights": [
+      256
+    ]
+  },
+  "fake:RAR": {
+    "n_total": 6000,
+    "extensions": {
+      ".png": 6000
+    },
+    "decoded_formats_sampled": {
+      "PNG": 500
+    },
+    "color_modes_sampled": {
+      "RGB": 500
+    },
+    "n_size_measured": 6000,
+    "file_size_bytes": {
+      "min": 17841,
+      "median": 113615,
+      "max": 175561
+    },
+    "n_dims_sampled": 500,
+    "widths": [
+      256
+    ],
+    "heights": [
+      256
+    ]
+  },
+  "fake:Switti": {
+    "n_total": 6000,
+    "extensions": {
+      ".png": 6000
+    },
+    "decoded_formats_sampled": {
+      "PNG": 500
+    },
+    "color_modes_sampled": {
+      "RGB": 500
+    },
+    "n_size_measured": 6000,
+    "file_size_bytes": {
+      "min": 193563,
+      "median": 402845,
+      "max": 680413
+    },
+    "n_dims_sampled": 500,
+    "widths": [
+      512
+    ],
+    "heights": [
+      512
+    ]
+  },
+  "fake:VAR": {
+    "n_total": 6000,
+    "extensions": {
+      ".png": 6000
+    },
+    "decoded_formats_sampled": {
+      "PNG": 500
+    },
+    "color_modes_sampled": {
+      "RGB": 500
+    },
+    "n_size_measured": 6000,
+    "file_size_bytes": {
+      "min": 33470,
+      "median": 122067,
+      "max": 178299
+    },
+    "n_dims_sampled": 500,
+    "widths": [
+      256
+    ],
+    "heights": [
+      256
+    ]
+  }
+}

@@ -1,7 +1,11 @@
 # Baseline Registry (deep-research-report-v2 §3.1)
 #
-# implementation_status 取值: vendored | integrated | reimplemented |
-#   faithful_reproduction | verified | lite | inspired
+# taxonomy (v3 P0-E):
+#   code_origin: official | reimplementation | inspired
+#   architecture_fidelity: exact | faithful | approximate
+#   protocol_fidelity: official | adapted | partial | transfer
+#   verification_status: unverified | runs | matched_reference
+# implementation_status 为旧字段, 以 taxonomy 为准
 # score_type: logit | probability | anomaly | similarity | distance
 # higher_is_fake: 进入公共 evaluator 前统一为 "越大越 fake"
 
@@ -11,6 +15,10 @@ cnn_detection:
   paper_url: "https://arxiv.org/abs/1912.11035"
   official_code_url: "https://github.com/PeterWang512/CNNDetection"
   implementation_status: reimplemented
+  code_origin: reimplementation
+  architecture_fidelity: faithful
+  protocol_fidelity: adapted
+  verification_status: runs
   access_type: black_box
   score_type: logit
   higher_is_fake: true
@@ -25,6 +33,10 @@ freq_spec:
   paper_url: "https://arxiv.org/abs/2003.08685"
   official_code_url: "https://github.com/RUB-SysSec/GANCTDetection"
   implementation_status: reimplemented
+  code_origin: reimplementation
+  architecture_fidelity: approximate
+  protocol_fidelity: adapted
+  verification_status: runs
   access_type: black_box
   score_type: logit
   higher_is_fake: true
@@ -38,6 +50,10 @@ npr:
   paper_url: "https://arxiv.org/abs/2312.10561"
   official_code_url: "https://github.com/chuangchuangtan/NPR-DeepfakeDetection"
   implementation_status: inspired
+  code_origin: inspired
+  architecture_fidelity: approximate
+  protocol_fidelity: adapted
+  verification_status: runs
   access_type: black_box
   score_type: logit
   higher_is_fake: true
@@ -51,7 +67,11 @@ univfd:
   paper: "Ojha et al., CVPR 2023"
   paper_url: "https://arxiv.org/abs/2302.10174"
   official_code_url: "https://github.com/WisconsinAIVision/UniversalFakeDetect"
-  implementation_status: faithful_reproduction
+  implementation_status: reimplemented  # 架构忠实但训练协议已适配, 非论文复现
+  code_origin: reimplementation
+  architecture_fidelity: faithful
+  protocol_fidelity: adapted
+  verification_status: runs
   access_type: black_box
   score_type: logit
   higher_is_fake: true
@@ -66,6 +86,10 @@ rigid:
   paper_url: "https://arxiv.org/abs/2405.20112"
   official_code_url: "https://github.com/IBM/RIGID"
   implementation_status: reimplemented
+  code_origin: reimplementation
+  architecture_fidelity: approximate
+  protocol_fidelity: partial
+  verification_status: runs
   access_type: black_box
   score_type: anomaly
   higher_is_fake: true
@@ -80,6 +104,10 @@ zed:
   paper_url: "https://arxiv.org/abs/2312.01588"
   official_code_url: "https://github.com/grip-unina/ZED"
   implementation_status: reimplemented
+  code_origin: reimplementation
+  architecture_fidelity: approximate
+  protocol_fidelity: partial
+  verification_status: runs
   access_type: black_box
   score_type: anomaly
   higher_is_fake: true
@@ -94,6 +122,10 @@ d3qe_lite:
   paper_url: "https://openaccess.thecvf.com/content/ICCV2025/html/Zhang_D3QE_Learning_Discrete_Distribution_Discrepancy-aware_Quantization_Error_for_Autoregressive-Generated_Image_ICCV_2025_paper.html"
   official_code_url: "https://github.com/Zhangyr2022/D3QE"
   implementation_status: lite
+  code_origin: inspired
+  architecture_fidelity: approximate
+  protocol_fidelity: adapted
+  verification_status: runs
   access_type: black_box
   score_type: logit
   higher_is_fake: true
@@ -107,6 +139,12 @@ d3qe_official:
   paper: "Zhang et al., ICCV 2025"
   official_code_url: "https://github.com/Zhangyr2022/D3QE"
   implementation_status: vendored
+  code_origin: official
+  architecture_fidelity: exact
+  protocol_fidelity: adapted
+  verification_status: runs
+  upstream_repo: "https://github.com/Zhangyr2022/D3QE"
+  upstream_commit: "UNKNOWN (vendored 目录无 git 元数据)"
   access_type: black_box
   score_type: logit
   higher_is_fake: true
@@ -121,6 +159,12 @@ prada:
   paper_url: "https://arxiv.org/abs/2511.20068"
   official_code_url: "https://github.com/jonasricker/prada"
   implementation_status: vendored
+  code_origin: official
+  architecture_fidelity: exact
+  protocol_fidelity: adapted
+  verification_status: runs
+  upstream_repo: "https://github.com/jonasricker/prada"
+  upstream_commit: "UNKNOWN (vendored 目录无 git 元数据)"
   access_type: white_box
   score_type: anomaly
   higher_is_fake: true
@@ -133,8 +177,14 @@ data_provenance:
   paper_title: "Data Provenance for Image Auto-Regressive Generation"
   paper: "ICLR 2026"
   paper_url: "https://proceedings.iclr.cc/paper_files/paper/2026/hash/5a1667459d0cdeb2fe6b2f0dffc5cb9d-Abstract-Conference.html"
-  official_code_url: "UNKNOWN"
+  official_code_url: "https://github.com/sprintml/DataProvenanceIAR"
   implementation_status: vendored
+  code_origin: official
+  architecture_fidelity: exact
+  protocol_fidelity: partial
+  verification_status: runs
+  upstream_repo: "https://github.com/sprintml/DataProvenanceIAR"
+  upstream_commit: "UNKNOWN (vendored 目录无 git 元数据)"
   access_type: white_box
   score_type: distance
   higher_is_fake: true
@@ -148,6 +198,10 @@ dire:
   paper_url: "https://arxiv.org/abs/2303.09295"
   official_code_url: "https://github.com/ZhendongWang6/DIRE"
   implementation_status: reimplemented
+  code_origin: reimplementation
+  architecture_fidelity: approximate
+  protocol_fidelity: transfer
+  verification_status: runs
   access_type: black_box
   score_type: logit
   higher_is_fake: true
@@ -162,6 +216,10 @@ lgrad:
   paper_url: "https://arxiv.org/abs/2211.17415"
   official_code_url: "https://github.com/chuangchuangtan/LGrad-DeepfakeDetection"
   implementation_status: reimplemented
+  code_origin: reimplementation
+  architecture_fidelity: approximate
+  protocol_fidelity: transfer
+  verification_status: runs
   access_type: black_box
   score_type: logit
   higher_is_fake: true
