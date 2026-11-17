@@ -37,16 +37,44 @@
 | 划分 | 状态 | Acc | AP | AUC | TPR@1%FPR |
 |---|---|---|---|---|---|
 | val | FROZEN | 0.933 | 0.9818 | 0.9790 | 0.825 |
-| test (84k) | **RUNNING** | NOT REPORTED | — | — | — |
+| test subsample-500 示例 | FROZEN | 0.743 | 0.8627 | 0.8587 | 0.241 |
+
+- test 为每生成器 500 张示例子集（7000 张，标注 `subsample-500-示例`），归档 `reports/runs/dire_arforensics_test_subsample500`
+- per-generator：LlamaGen 0.970 / Janus_Pro 0.954 较好；RAR 0.170 / Open_MAGVIT2 0.312 / Infinity 0.366 较差——DIRE 为 Diffusion 专用方法，在 AR 上属迁移测试，不应解读为其在原领域无效
 
 - 权重：`outputs/dire_arforensics/best.pth`；val 结果 `results_val.json` + predictions.csv
 - 训练：2 epochs（best val AP 0.9818）
 
 ## 5. PRADA 官方代码（DARG）
 
-- T2I（4 fake 目录）：**RUNNING**（一次 OOM 后以 expandable_segments 独占 GPU0 重跑；real 特征已缓存）
-- C2I（8 fake 目录）：**RUNNING**（`rar.data` stub 修复后重跑，特征缓存复用）
-- Final test metrics: NOT REPORTED
+### T2I tiny-50 示例（FROZEN，标注 `tiny-50-示例`）
+
+每目录 50 张示例子集（symlink，不动原数据），官方预训练评分函数（train_size=0）。
+输出：`outputs/prada_t2i_tiny/2026-11-17_14-53-33/`
+
+| fake 生成器 | PRADA AUROC |
+|---|---|
+| infinity_2b | 0.9988 |
+| janus_1b | 0.9908 |
+| llamagen_xlstage2 | 0.9980 |
+| switti_1024 | 0.9996 |
+
+与论文 T2I 检测性能一致，复现成功。单特征基线（gt_llh_diff / icas / quant_err / aeroblade）见同目录 CSV。
+
+### C2I tiny-50 示例（FROZEN，标注 `tiny-50-示例`）
+
+每目录 50 张示例子集，官方预训练评分函数（train_size=0）。
+输出：`outputs/prada_c2i_tiny/2026-11-17_17-35-14/`、`outputs/prada_c2i_tiny_b2/2026-11-17_17-35-14/`
+
+| fake 生成器 | PRADA AUROC | | fake 生成器 | PRADA AUROC |
+|---|---|---|---|---|
+| hmar_d16 | 0.786 | | hmar_d24 | 0.6448 |
+| llamagen_b256 | 0.6504 | | rar_l | 0.8204 |
+| rar_b | 0.746 | | rar_xl | 0.782 |
+| var_d16 | 0.7456 | | var_d36 | 0.660 |
+
+注：C2I 模式 8 个代表模型分两批跑完。AUROC 低于 T2I 模式（0.99+），可能因素：每类仅 50 张、real 为 HF ImageNet 镜像子集（非官方子集）、模型规模差异；归因混淆矩阵见 cfm_prada_test.pdf。
+- 本地补丁（非算法改动）：`predict.py` 特征缓存 `map_location="cpu"` + 每 pass `gc.collect()`/`empty_cache()`（修复 wrapper 累积 OOM）；`external/rar/data.py` 推理 stub
 - 协议偏差：T2I real 为 ARForensics 替代 RAISE-1k；C2I real 为 HF ImageNet 镜像子集（见 `baselines/reproduction/prada.md`）
 
 ## 6. Data Provenance（采样）

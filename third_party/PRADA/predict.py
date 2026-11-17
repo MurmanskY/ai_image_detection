@@ -1,6 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
+import gc
 
 import fire
 import matplotlib.pyplot as plt
@@ -76,7 +77,7 @@ def predict(
             feature_file = feature_dir / f"dataset={dataset}_model={model}.pt"
 
             if feature_file.exists():
-                features = torch.load(feature_file)
+                features = torch.load(feature_file, map_location="cpu")
             else:
                 wrapper = get_wrapper(model, checkpoints_root=model_weight_dir)
 
@@ -140,6 +141,11 @@ def predict(
                 if hasattr(wrapper, "scale_lengths"):
                     features["scale_lengths"] = wrapper.scale_lengths  # type: ignore
                 torch.save(features, feature_file)
+                # free model weights before loading the next wrapper
+                del wrapper
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
             # step 2: compute features composed from conditional/unconditional likelihoods
             features["gt_llh_diff"] = features["cond_gt_llh_BL"] - features["uncond_gt_llh_BL"]
@@ -223,7 +229,9 @@ def predict(
             mean_features = torch.cat(mean_features, dim=1)
 
             # stack features for all models, add pseudo score for real class
-            mean_features_with_real = torch.cat([torch.zeros(mean_features.shape[0], 1), mean_features], dim=1)
+            mean_features_with_real = torch.cat(
+                [torch.zeros(mean_features.shape[0], 1, device=mean_features.device), mean_features], dim=1
+            )
 
             # maximum score of all models is our "fake" score
             max_values = mean_features.amax(dim=1)

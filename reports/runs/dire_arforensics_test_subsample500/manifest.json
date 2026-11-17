@@ -1,0 +1,14 @@
+{
+  "run_id": "dire_arforensics_test_subsample500",
+  "git_commit": "a5e190f71eaf0a0a2cafd78032442e91a747acf2",
+  "method": "dire",
+  "split": "test",
+  "seed": null,
+  "checkpoint": "best.pth",
+  "checkpoint_sha256": "6e668a6b1e482f84e5e166c990bcd090e06badae015795dafc3638e266d46cf4",
+  "sample_count": 7000,
+  "dataset_manifest": null,
+  "dataset_manifest_sha256": null,
+  "archived_at": "2026-11-17T06:32:08.668705+00:00",
+  "python": "3.12.12"
+}
