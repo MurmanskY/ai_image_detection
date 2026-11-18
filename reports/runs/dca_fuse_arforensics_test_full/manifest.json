@@ -1,0 +1,14 @@
+{
+  "run_id": "dca_fuse_arforensics_test_full",
+  "git_commit": "b7f63acbcc404a74b498188d14f5516b2471ed20",
+  "method": "dca_fuse",
+  "split": "test",
+  "seed": null,
+  "checkpoint": "best.pth",
+  "checkpoint_sha256": "71cab368c86979dcd2071450e312b3d4e7937011c5225416ab2ba1cdaa2de411",
+  "sample_count": 336000,
+  "dataset_manifest": null,
+  "dataset_manifest_sha256": null,
+  "archived_at": "2026-11-18T18:45:22.732818+00:00",
+  "python": "3.12.12"
+}

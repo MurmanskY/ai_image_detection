@@ -21,8 +21,11 @@
 |---|---|---|---|---|---|---|---|
 | RIGID | FROZEN | 0.675 | 0.655 | 0.7421 | 0.7407 | 0.0997 | 阈值 -9.914 (Youden's J)；有 predictions.csv |
 | ZED | FROZEN | 0.564 | 0.483 | 0.5639 | 0.5806 | 0.015 | 阈值 0.0451；**每类 500 采样子集** |
+| ZED v2 (abs_delta02) | FROZEN | 0.514 | 0.525 | 0.5133 | 0.5218 | 0.002 | 阈值 0.0394；val 选择的统计量在 test 上未泛化 |
 
 注：ZED 每类仅 500 张，1%FPR 对应 5 个负样本、0.1%FPR 不足 1 个——其 `TPR@0.1%FPR` 无统计解释力，`TPR@1%FPR` 也须连同 N_real=500 一并解读，不能与 6000/42000 负样本的方法直接并列。
+
+**ZED 专项核查结论（见 `baselines/reproduction/zed.md`）**：实现与 SReC 协议逐层核对无误（NLL≈entropy 的数值合理）；val 上统计量对比曾显示 abs_delta02 优于 abs_delta01（0.77 vs 0.68），但 test 上反而更差（AUC 0.52 vs 0.58）——说明 ZED 的信号选择对生成器不稳定，**其差性能更可能来自方法本身对 AR 图像的弱适用性，而非实现错误**。
 
 修正前 sigmoid+0.5 阈值下 RIGID/ZED 的 Acc/F1 无效，已从报告中移除；AUROC/AP 不受单调变换影响。
 
@@ -90,7 +93,16 @@
 - 结论：单变量 token 统计（entropy/gini/transition/q-error）在 7 个生成器上 AUC 0.37–0.63 且方向跨生成器不一致 → bag-of-tokens 统计受 tokenizer affinity 影响，不能单独作为通用 AR 指纹
 - 状态：FROZEN
 
-## 8.1 格式/压缩偏差与统一重编码对照（v3 P1-D）
+## 8. 数据审计
+
+- ARForensics manifest（98,000 行，含 sha256/phash）：`data/manifests/arforensics.csv`；审计报告 `reports/dataset_audit/arforensics.json`
+- 标签/generator 元数据/重复路径：0 错误
+- 精确重复：17 组，其中 **3 组跨 train/test**（`train/0_real` 与 Switti/LlamaGen/Infinity `0_real` 各 1 张 ImageNet 图 sha256 相同）——真实但极小规模（3/98,000）的 train-test 泄漏，源自 ImageNet 图像内容重复，结果解读时需声明
+- 近似重复（pHash ≤ 8/64）：1,238 候选对，多为同 generator 同类别生成图，需人工复核，不直接判为重复
+- DARG manifest：`data/manifests/darg_t2i.csv`（6,000 行）、`darg_c2i.csv`（160,000 行）
+- 状态：FROZEN
+
+### 8.1 格式/压缩偏差与统一重编码对照（v3 P1-D）
 
 **发现**：ARForensics real 100% 为 JPEG（48,997 张），7 个生成器的 fake 100% 为 PNG
 （`reports/dataset_audit/format_bias_arforensics.json`）。检测器可能利用
@@ -109,18 +121,33 @@
 但约 6 个 AUC 点的差距表明显式格式混杂确实抬高了原始数字。
 **后续 benchmark 主表应同时报告原始与统一重编码两组结果。**
 
-## 8.2 跨 split 泄漏清理（v3 P0-B）
+### 8.2 跨 split 泄漏清理（v3 P0-B）
 
 数据审计发现的 3 组 train/test 精确重复已按 sha256 剔除（保留 test 侧，删除 train 侧），
 生成 `data/manifests/arforensics_clean.csv`（97,997 行）与
 `data/manifests/leakage_exclusions.csv`。注意：已冻结结果是在清理前数据上得到的，
 3/98,000 的泄漏对指标影响可忽略，但正式论文结果必须基于 clean manifest。
 
-## 8. 数据审计
+## 9. DCA-Fuse 全量 test（84k，α=0.7，阈值 0.805 val 校准）
 
-- ARForensics manifest（98,000 行，含 sha256/phash）：`data/manifests/arforensics.csv`；审计报告 `reports/dataset_audit/arforensics.json`
-- 标签/generator 元数据/重复路径：0 错误
-- 精确重复：17 组，其中 **3 组跨 train/test**（`train/0_real` 与 Switti/LlamaGen/Infinity `0_real` 各 1 张 ImageNet 图 sha256 相同）——真实但极小规模（3/98,000）的 train-test 泄漏，源自 ImageNet 图像内容重复，结果解读时需声明
-- 近似重复（pHash ≤ 8/64）：1,238 候选对，多为同 generator 同类别生成图，需人工复核，不直接判为重复
-- DARG manifest：`data/manifests/darg_t2i.csv`（6,000 行）、`darg_c2i.csv`（160,000 行）
-- 状态：FROZEN
+归档：`reports/runs/dca_fuse_arforensics_test_full/`（含 predictions.csv.gz）。
+
+| 生成器 | UnivFD AUC | DCA-Fuse AUC | Δ |
+|---|---|---|---|
+| LlamaGen | 0.9599 | 0.9612 | +0.001 |
+| RAR | 0.9697 | 0.9706 | +0.001 |
+| VAR | 0.9560 | 0.9490 | -0.007 |
+| Janus_Pro | 0.9362 | 0.9360 | ~0 |
+| Switti | 0.8507 | 0.8431 | -0.008 |
+| Open_MAGVIT2 | 0.8863 | **0.9053** | **+0.019** |
+| Infinity | 0.8305 | 0.8244 | -0.006 |
+| **overall** | 0.9127 | **0.9128** | ~0 |
+
+全量结论：融合整体与 UnivFD 持平，Open_MAGVIT2 +1.9 点（机制通道在其
+自身 tokenizer 家族信号最强），Infinity/Switti 略降。注：sub500 分析中
+观察到的 worst-case 改进在全量上未复现（样本协议差异），如实记录。
+
+## 10. 进行中的全量实验
+
+- DIRE test 全量 84k：**RUNNING**（GPU1）
+- PRADA T2I 全量（官方 predict.py，DARG-adapted-real-v1）：**RUNNING**（GPU0）
