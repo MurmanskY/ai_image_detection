@@ -6,6 +6,8 @@
 
 冻结的实验结果总表见 **`reports/RESULTS.md`**；完整实验报告（实验设计、
 方法差异、结果细节与可信度分层）见 **`docs/experiments.md`**；
+自有方法 **DCA-Fuse**（双通道亲和力融合检测）的设计、动机、
+实验与分析见 **`docs/method_dca_fuse.md`**；
 各方法复现细节与协议偏差见 `baselines/reproduction/`；
 数据审计报告见 `reports/dataset_audit/`。
 
