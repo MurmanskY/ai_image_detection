@@ -184,3 +184,48 @@ cluster bootstrap。
 macro AUROC 为 0.7003（旧 `S_min`: 0.6952），最差生成器 0.5585（旧
 `S_min`: 0.5594）；nominal 5% conformal p-value 在 test real 上观测 FPR
 为 3.89%。此结果仅属探索性，不作为 open-set claim。
+
+## 12. PARD P0 MVP（v6 指南主线，subsample-500 示例）：负结果，按预注册停止
+
+脚本：`analysis/pard_mvp.py`（+ 诊断消融 `analysis/pard_ablation.py`）；
+结果：`outputs/pard/pard_mvp.json` / `pard_ablation.json`；
+特征缓存：`outputs/pard/pard_mvp_feats.npz`。
+
+设计（v6 §2 的 MVP 简化）：DINOv2 ViT-S/14 冻结（与 RIGID 同骨干，隔离
+"响应建模"贡献），5 类受控扰动 × 2 强度（JPEG95/75、Resize 0.9/0.75、
+Gaussian Blur、Noise 0.05/0.10、Crop-Resize），4 个中间层 patch 特征的
+一阶响应 Δ、二阶响应 K 与四象限空间统计构成 370 维描述子；
+val real 1000（500 fit / 500 cal）real-only 建模，LedoitWolf Mahalanobis /
+kNN(k=10) 异常评分；test 每生成器 500 real + 500 fake（seed=0，
+**subsample-500 示例协议**）。RIGID 分数在同批图像、同骨干上同步计算。
+
+| 生成器 | PARD-kNN | PARD-Mahalanobis | RIGID（同子集） |
+|---|---:|---:|---:|
+| Infinity | 0.663 | 0.534 | 0.689 |
+| Janus_Pro | 0.720 | 0.574 | 0.658 |
+| LlamaGen | 0.649 | 0.580 | 0.560 |
+| Open_MAGVIT2 | 0.551 | 0.485 | 0.662 |
+| RAR | 0.606 | 0.550 | 0.676 |
+| Switti | 0.600 | 0.562 | 0.634 |
+| VAR | 0.553 | 0.524 | 0.518 |
+| **macro** | **0.620** | **0.544** | **0.628** |
+| worst | 0.551 | 0.485 | 0.518 |
+
+预注册 GO 判定（相对同子集 RIGID）：macro 增益 -0.008（要求 ≥+0.03），
+worst 增益 +0.032（要求 ≥+0.05），不差于 RIGID 的生成器 3/7（要求 ≥4）
+——**三条均未通过，GO=false，按 v6 停止条件不扩大规模**。
+
+诊断性消融（post-hoc，不作为 GO 依据；kNN macro）：
+first-order 0.626 / second-order 0.631 / patch-only 0.629 /
+global-CLS-dynamics-only 0.476（多扰动全局动态不如 RIGID 单噪声）；
+按扰动：noise 0.631 > crop 0.620 > blur 0.607 > jpeg 0.574 > resize 0.498；
+按层：layer2 0.635 > layer5 0.628 > layer8 0.591 > layer11 0.572
+（低层特征略优）。**没有任何子块超过 RIGID +0.03**，排除"特征选择不当"
+作为主要败因。
+
+结论：在 DINOv2 冻结特征空间中，受控扰动的局部响应动力学经 real-only
+统计建模后，不提供超越 RIGID 全局相似度的稳定跨生成器 AR 检测信号。
+结合 CTRF 负结果，real-only/免训练的冻结特征统计建模路线在 ARForensics
+上饱和于 RIGID 量级（0.63–0.74），显著低于监督式 UnivFD（0.913）。
+PARD 作为独立方法主线停止；若未来重启，需先解决参考分布对内容/格式的
+敏感性（val real 与 test real 的来源差异）这一混杂因素。

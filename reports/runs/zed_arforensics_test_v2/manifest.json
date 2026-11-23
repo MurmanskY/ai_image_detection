@@ -1,0 +1,14 @@
+{
+  "run_id": "zed_arforensics_test_v2",
+  "git_commit": "b7f63acbcc404a74b498188d14f5516b2471ed20",
+  "method": "zed",
+  "split": "test",
+  "seed": null,
+  "checkpoint": null,
+  "checkpoint_sha256": null,
+  "sample_count": 7000,
+  "dataset_manifest": null,
+  "dataset_manifest_sha256": null,
+  "archived_at": "2026-11-18T12:09:27.658240+00:00",
+  "python": "3.12.12"
+}

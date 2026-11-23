@@ -349,3 +349,19 @@ python analysis/dca_fuse_eval_full.py --alpha 0.7 --n_boot 1000 \
 比 scalar minimum 更稳定**。tokenizer-affinity 主线到此为止，不再投入
 structured feature 大工程。v5 建议的备选（Forensic Self-Description +
 mechanism response）记录在案，不展开。
+
+## PARD（v6 指南主线，P0 MVP）：负结果
+
+按 `deep-research-report-v6.pdf` 的主线 PARD（扰动感知响应动力学）做了
+P0 MVP：`analysis/pard_mvp.py`。DINOv2 ViT-S/14 冻结（与 RIGID 同骨干），
+5 类扰动 × 2 强度，4 层 patch 一阶/二阶响应 + 空间统计 → 370 维描述子，
+val real-only Mahalanobis / kNN；subsample-500 协议，RIGID 同子集对照。
+
+结果（`outputs/pard/pard_mvp.json`）：PARD-kNN macro 0.620 vs RIGID 0.628，
+预注册 GO 三条均未通过（macro 增益 -0.008，worst +0.032，3/7 不差于
+RIGID），**按 v6 停止条件不扩大规模**。诊断消融（`pard_ablation.py`）
+显示无特征子块超过 RIGID +0.03；多扰动全局 CLS 动态（0.476）反而不如
+RIGID 单噪声，低层特征略优于深层。详见 `reports/RESULTS.md` §12。
+
+至此两条免训练新机制主线（CTRF、PARD）均按预注册标准终止；
+监督式 UnivFD 仍为最强基线。
