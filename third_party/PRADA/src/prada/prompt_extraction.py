@@ -67,3 +67,10 @@ def extract_prompts(
     prompt_file.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(prompt_file, index=False)
     print(f"Saved results to {prompt_file}.")
+
+    # free BLIP2 before the next AR wrapper is loaded
+    del model_obj, processor
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()

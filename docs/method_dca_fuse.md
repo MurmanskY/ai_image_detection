@@ -320,3 +320,32 @@ group bootstrap。
 python analysis/dca_fuse_eval_full.py --alpha 0.7 --n_boot 1000 \
     --out outputs/dca_fuse/results_test_full_recalibrated.json
 ```
+
+---
+
+# v5 指南验证：CTRF 关系结构 MVP（负结果，已按预注册标准停止）
+
+按 `deep-research-report-new-method-v5.pdf` 的主线 CTRF（跨 tokenizer 关系结构）
+做了 P0-A MVP：`analysis/ctrf_qerr_mvp.py`，经验 CDF 秩归一化 → 成对差关系特征
+（5 tokenizer → 5 边际 + 10 成对差）→ real-only shrinkage Mahalanobis / kNN。
+
+结果（500/类协议，`outputs/ctrf/qerr_relational_mvp.json`）：
+
+| 生成器 | Mahalanobis | kNN | S_min (CTAD) |
+|---|---|---|---|
+| Open_MAGVIT2 | **0.972** | 0.903 | 0.857 |
+| Switti | **0.695** | 0.646 | 0.615 |
+| RAR | 0.734 | 0.724 | 0.767 |
+| Infinity | 0.621 | 0.579 | 0.672 |
+| Janus_Pro | 0.666 | 0.643 | 0.680 |
+| LlamaGen | 0.652 | 0.644 | 0.715 |
+| VAR | 0.515 | 0.491 | 0.559 |
+| **macro** | **0.694** | 0.661 | **0.695** |
+
+预注册 stop 标准（macro +0.03 或 worst-gen +0.02）：**未通过，按指南停止**。
+
+分析：关系结构呈生成器特异互补（Open_MAGVIT2 +0.11、Switti +0.08），
+但 VAR/RAR 反噬，整体与标量 min 持平——**multivariate dependency 并不
+比 scalar minimum 更稳定**。tokenizer-affinity 主线到此为止，不再投入
+structured feature 大工程。v5 建议的备选（Forensic Self-Description +
+mechanism response）记录在案，不展开。

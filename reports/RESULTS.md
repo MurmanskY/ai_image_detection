@@ -43,7 +43,9 @@
 |---|---|---|---|---|---|
 | val | FROZEN | 0.933 | 0.9818 | 0.9790 | 0.825 |
 | test subsample-500 示例 | FROZEN | 0.743 | 0.8627 | 0.8587 | 0.241 |
+| test 全量 84k | FROZEN | 0.715 | 0.8383 | 0.8300 | 0.235 |
 
+- test 全量 84k 归档 `reports/runs/dire_arforensics_test_full`
 - test 为每生成器 500 张示例子集（7000 张，标注 `subsample-500-示例`），归档 `reports/runs/dire_arforensics_test_subsample500`
 - per-generator：LlamaGen 0.970 / Janus_Pro 0.954 较好；RAR 0.170 / Open_MAGVIT2 0.312 / Infinity 0.366 较差——DIRE 为 Diffusion 专用方法，在 AR 上属迁移测试，不应解读为其在原领域无效
 
@@ -149,8 +151,9 @@
 
 ## 10. 进行中的全量实验
 
-- DIRE test 全量 84k：**RUNNING**（GPU1）
-- PRADA T2I 全量（官方 predict.py，DARG-adapted-real-v1）：**RUNNING**（GPU0）
+- DIRE test 全量 84k：已完成，overall AUC 0.830 / AP 0.838（迁移测试，见第 4 节）
+- PRADA T2I 全量（官方 predict.py，DARG-adapted-real-v1）：**FAILED**（特征缓存完成后 BLIP2 prompt 提取阶段 OOM，特征已缓存可续跑）
+- CTRF 关系结构 MVP（v5 指南主线）：已验证，**负结果**——Mahalanobis 关系版 macro 0.694 vs S_min 0.695 持平，未过 GO 门槛（macro +0.03 / worst-gen +0.02），按预注册标准停止该主线。详见 `docs/method_dca_fuse.md` 末节。
 
 ## 11. DCA-Fuse 路径配对重评估（84k，α=0.7）
 
