@@ -63,6 +63,45 @@ def bootstrap_ci(labels, scores, metric_fn, n_boot=1000, seed=42, stratified=Tru
     return float(np.percentile(vals, 2.5)), float(np.percentile(vals, 97.5))
 
 
+def paired_bootstrap_delta(labels, scores_a, scores_b, metric_fn=roc_auc_score,
+                           n_boot=1000, seed=42):
+    """Estimate metric(B) - metric(A) with a paired, stratified bootstrap.
+
+    Rows in ``scores_a`` and ``scores_b`` must refer to the same examples in
+    the same order. Resampling shared row indices preserves that pairing.
+    """
+    labels = np.asarray(labels)
+    scores_a = np.asarray(scores_a)
+    scores_b = np.asarray(scores_b)
+    if labels.ndim != 1 or scores_a.ndim != 1 or scores_b.ndim != 1:
+        raise ValueError("labels and scores must be 1D arrays")
+    if not (len(labels) == len(scores_a) == len(scores_b)):
+        raise ValueError("paired labels and score arrays must have equal length")
+    if len(np.unique(labels)) < 2:
+        raise ValueError("paired metric comparison requires both label classes")
+    if not np.isfinite(scores_a).all() or not np.isfinite(scores_b).all():
+        raise ValueError("paired scores must contain only finite values")
+    if n_boot < 1:
+        raise ValueError("n_boot must be positive")
+
+    point_delta = float(metric_fn(labels, scores_b) - metric_fn(labels, scores_a))
+    rng = np.random.default_rng(seed)
+    class_indices = [np.flatnonzero(labels == label) for label in np.unique(labels)]
+    deltas = np.empty(n_boot, dtype=float)
+    for index in range(n_boot):
+        sample = np.concatenate([
+            indices[rng.integers(0, len(indices), len(indices))]
+            for indices in class_indices
+        ])
+        deltas[index] = metric_fn(labels[sample], scores_b[sample]) - metric_fn(
+            labels[sample], scores_a[sample])
+    return {
+        "delta": point_delta,
+        "ci95": (float(np.percentile(deltas, 2.5)),
+                 float(np.percentile(deltas, 97.5))),
+    }
+
+
 def compute_metrics(labels, scores, threshold=0.5, n_boot=0):
     """labels: 0/1 数组; scores: 越大越倾向 fake 的分数。
 

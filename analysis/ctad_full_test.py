@@ -61,6 +61,11 @@ def main():
 
     data = {"groups": np.array([f"{l}:{g}" for l, g in groups]),
             "names": np.array(names)}
+    for label, gen in groups:
+        data[f"paths_{label}_{gen}"] = np.asarray([
+            path for path, sample_label, sample_gen in probe.samples
+            if sample_label == label and sample_gen == gen
+        ])
     for name, spec in TOKENIZERS.items():
         print(f"== tokenizer: {name} (test 全量)")
         qerr = compute_qerr_all(name, spec, groups, args.root, None,

@@ -1,0 +1,14 @@
+{
+  "run_id": "dca_fuse_arforensics_test_full_recalibrated",
+  "git_commit": "35b8c33524933540becb6e6b6c49f257546f4cd2",
+  "method": "dca_fuse",
+  "split": "test",
+  "seed": null,
+  "checkpoint": "best.pth",
+  "checkpoint_sha256": "71cab368c86979dcd2071450e312b3d4e7937011c5225416ab2ba1cdaa2de411",
+  "sample_count": 84000,
+  "dataset_manifest": "data/manifests/arforensics.csv",
+  "dataset_manifest_sha256": "4fac96ec4ebea7cc88c6be1ddd8ad425c81e483102dabeee15c9a978230f24ee",
+  "archived_at": "2026-11-23T04:28:27.595209+00:00",
+  "python": "3.12.12"
+}

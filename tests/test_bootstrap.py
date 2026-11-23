@@ -7,7 +7,11 @@ from sklearn.metrics import roc_auc_score
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from engine.metrics import bootstrap_ci, compute_metrics  # noqa: E402
+from engine.metrics import (  # noqa: E402
+    bootstrap_ci,
+    compute_metrics,
+    paired_bootstrap_delta,
+)
 
 
 def test_bootstrap_ci_contains_point_estimate():
@@ -43,3 +47,28 @@ def test_compute_metrics_no_boot_by_default():
     scores = np.array([0.1, 0.2, 0.8, 0.9])
     m = compute_metrics(labels, scores)
     assert "auc_ci95" not in m
+
+
+def test_paired_bootstrap_delta_is_zero_for_identical_scores():
+    labels = np.array([0, 0, 1, 1])
+    scores = np.array([0.1, 0.4, 0.6, 0.9])
+    result = paired_bootstrap_delta(labels, scores, scores, n_boot=100)
+    assert result["delta"] == 0
+    assert result["ci95"] == (0, 0)
+
+
+def test_paired_bootstrap_delta_is_deterministic_and_signed():
+    labels = np.array([0] * 40 + [1] * 40)
+    rng = np.random.default_rng(0)
+    baseline = rng.normal(size=80)
+    improved = baseline + labels * 100
+    result = paired_bootstrap_delta(labels, baseline, improved, n_boot=100)
+    assert result == paired_bootstrap_delta(
+        labels, baseline, improved, n_boot=100)
+    assert result["delta"] > 0
+    assert result["ci95"][0] > 0
+
+
+def test_paired_bootstrap_requires_aligned_arrays():
+    with np.testing.assert_raises(ValueError):
+        paired_bootstrap_delta([0, 1], [0.1], [0.2, 0.3])

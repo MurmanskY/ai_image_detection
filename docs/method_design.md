@@ -1,7 +1,8 @@
 # 自有方法设计探索：跨 Tokenizer 亲和力差异检测（CTAD）
 
-> 状态：设计提案 v0.1（未实现）。目标：在黑盒、免训练/轻训练条件下，
-> 解决现有 baseline 暴露的**跨生成器泛化失效**问题。
+> 历史记录：本文保留 2026-11-17 的探索记录和 pilot 数值；后续全量、
+> 配对重评估已修正其性能结论。当前方法与最新结果以
+> [`docs/method_dca_fuse.md`](./method_dca_fuse.md) §8 为准。
 
 ## 1. 实验证据回顾（motivation 的事实基础）
 
@@ -274,3 +275,14 @@ mean_low 0.635，保持 min 聚合。
 DCA-Fuse 最终版（α=0.7, 阈值 0.805）：
 overall AUC 0.953 / min-gen 0.921 (Infinity) / Open_MAGVIT2 0.927，
 已归档 `reports/runs/dca_fuse_arforensics_test_sub500/`。
+
+## 后续全量结果的更正（2026-11-23）
+
+以上 0.953 overall AUC 是 500/类 pilot，不应作为 full-scale claim。
+路径匹配的 84k full test 得到 DCA-Fuse AUROC 0.91275；相对 UnivFD 的
+paired ΔAUROC 为 +0.000001，95% CI [-0.000670, +0.000687]，不能支持
+整体提升。Open_MAGVIT2 有显著改善，但多个生成器出现显著回退。
+非参数 empirical-tail/conformal CTAD 的 500/类 pilot macro AUROC 为
+0.7003，对旧 S_min 的 0.6952 仅有轻微提升，最差生成器没有改善。
+完整 protocol、逐生成器 paired CI 和复现命令见
+[`docs/method_dca_fuse.md`](./method_dca_fuse.md)。

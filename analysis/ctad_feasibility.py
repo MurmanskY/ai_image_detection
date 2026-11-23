@@ -31,6 +31,10 @@ sys.path.insert(0, os.path.join(PROJ, "third_party", "D3QE"))
 sys.path.insert(0, os.path.join(PROJ, "third_party", "PRADA", "src"))
 
 from datasets.arforensics import ARForensicsDataset  # noqa: E402
+from analysis.ctad_affinity import (  # noqa: E402
+    affinity_score,
+    conformal_upper_tail_p,
+)
 
 PRADA_WEIGHTS = os.path.join(PROJ, "third_party", "PRADA", "model_weights")
 
@@ -227,9 +231,13 @@ def main():
     parser.add_argument("--root", default="data/ARForensics")
     parser.add_argument("--n", type=int, default=500, help="每类采样数")
     parser.add_argument("--n_ref", type=int, default=1000, help="real 参考样本数 (val)")
+    parser.add_argument("--target_fpr", type=float, default=0.05,
+                        help="conformal p-value operating point")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--out", default="outputs/ctad/feasibility.json")
     args = parser.parse_args()
+    if not 0 < args.target_fpr < 1:
+        raise ValueError("--target_fpr must be between 0 and 1")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
@@ -240,6 +248,7 @@ def main():
     groups = sorted({(label, gen) for _, label, gen in probe.samples})
 
     # 参考分布: val real
+    names = list(TOKENIZERS)
     ref = {}
     for name, spec in TOKENIZERS.items():
         print(f"== tokenizer: {name} (val real 参考)")
@@ -258,6 +267,22 @@ def main():
         del model
         torch.cuda.empty_cache()
 
+    # Split the real-only validation reference before fitting empirical tails.
+    # The calibration half is never used to estimate tokenizer CDFs.
+    ref_lengths = {len(values) for values in ref.values()}
+    if len(ref_lengths) != 1:
+        raise ValueError("tokenizer reference sets must contain the same images")
+    n_ref = ref_lengths.pop()
+    if n_ref < 4:
+        raise ValueError("at least four real reference images are required")
+    ref_order = np.random.default_rng(42).permutation(n_ref)
+    n_fit = n_ref // 2
+    fit_indices, calibration_indices = ref_order[:n_fit], ref_order[n_fit:]
+    ref_fit = [ref[name][fit_indices] for name in names]
+    ref_calibration = np.column_stack(
+        [ref[name][calibration_indices] for name in names])
+    calibration_scores = affinity_score(ref_calibration, ref_fit)
+
     # 每组 qerr
     qerr = {}
     for name, spec in TOKENIZERS.items():
@@ -266,7 +291,6 @@ def main():
             name, spec, groups, args.root, args.n, args.batch_size, device)
 
     # z 分数与检测分数
-    names = list(TOKENIZERS)
     results = {"n_per_class": args.n, "n_ref": len(ref[names[0]]),
                "ref_stats": {k: {"mean": float(ref[k].mean()),
                                  "std": float(ref[k].std())} for k in names},
@@ -280,6 +304,21 @@ def main():
                            (ref[k].std() + 1e-12) for k in names], axis=1)
         z_fake = np.stack([(qerr[k][(1, gen)] - ref[k].mean()) /
                            (ref[k].std() + 1e-12) for k in names], axis=1)
+        q_real = np.column_stack([qerr[k][real_group] for k in names])
+        q_fake = np.column_stack([qerr[k][(1, gen)] for k in names])
+        affinity_real = affinity_score(q_real, ref_fit)
+        affinity_fake = affinity_score(q_fake, ref_fit)
+        labels = np.array([0] * len(affinity_real) + [1] * len(affinity_fake))
+        affinity = np.concatenate([affinity_real, affinity_fake])
+        conformal_p = conformal_upper_tail_p(calibration_scores, affinity)
+        is_fake = conformal_p <= args.target_fpr
+        conformal_metrics = {
+            "affinity_auc": float(roc_auc_score(labels, affinity)),
+            "target_fpr": args.target_fpr,
+            "real_calibration_size": int(len(calibration_scores)),
+            "test_fpr": float(is_fake[labels == 0].mean()),
+            "test_tpr": float(is_fake[labels == 1].mean()),
+        }
         labels = np.array([0] * len(z_real) + [1] * len(z_fake))
         entry = {}
         for score_name, s_real, s_fake in [
@@ -300,6 +339,7 @@ def main():
                 labels, np.concatenate([qerr[k][real_group], qerr[k][(1, gen)]])))
             for k in names
         }
+        entry["empirical_tail_conformal"] = conformal_metrics
         results["per_generator"][gen] = entry
         print(gen, json.dumps(entry, indent=None))
 
@@ -312,6 +352,17 @@ def main():
         aucs = [v["per_tokenizer_auc"][k] for v in results["per_generator"].values()]
         results["macro"][f"single_{k}"] = {
             "auc_mean": float(np.mean(aucs)), "auc_min": float(np.min(aucs))}
+    conformal_aucs = [
+        value["empirical_tail_conformal"]["affinity_auc"]
+        for value in results["per_generator"].values()
+    ]
+    results["macro"]["empirical_tail_conformal"] = {
+        "auc_mean": float(np.mean(conformal_aucs)),
+        "auc_min": float(np.min(conformal_aucs)),
+        "reference_fit_size": int(n_fit),
+        "real_calibration_size": int(len(calibration_scores)),
+        "seed": 42,
+    }
 
     print(json.dumps(results["macro"], indent=2))
     with open(args.out, "w") as f:

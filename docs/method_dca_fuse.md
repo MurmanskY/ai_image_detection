@@ -193,10 +193,9 @@ real——亲和力以"异常低 qerr"单向出现，假设成立。
 | Infinity | **0.921** | 0.921 | 0.052 |
 | **overall** | **0.953** (CI95 [0.950, 0.956]) | 0.953 | 0.382 |
 
-**核心结论**：融合在几乎不损失任何强项的前提下，把最差生成器
-从 0.911 抬到 **0.921**（Open_MAGVIT2 0.911→**0.927**），
-即对 UnivFD 最薄弱的情形实现了帕累托改进，同时机制通道带来
-更好的格式稳健性（§4.3）。
+**仅限 pilot 的观察**：在 500/类子集上，Open-MAGVIT2 有提升；该结果
+没有证明总体或跨生成器优势。全量配对结果见 §8，不能将这组子集结果
+表述为稳定的 Pareto improvement。
 
 ## 5. 局限与后续方向
 
@@ -212,8 +211,11 @@ real——亲和力以"异常低 qerr"单向出现，假设成立。
 4. **Janus 通道**：Janus 与 LlamaGen 共享同一 VQ-VAE，
    已由 llamagen 通道覆盖（对 Janus fake 呈中性），
    无需单独通道。
-5. 待做：注册进统一框架（`baselines/dca_fuse.py`）参与主表、
-   完整 84k test 评估、LOGO 完整协议与 CI。
+5. 尚待完成：注册进统一框架（`baselines/dca_fuse.py`）参与主表，以及
+   leave-one-tokenizer-family-out 和外部数据集验证。84k 全量结果已按图像
+   路径匹配并做 paired bootstrap（§8）；全量评估脚本会按当前
+   \(\alpha\) 在 validation 上重算融合阈值与 real-reference 标准化，
+   改变参数后应重新运行，不能复用旧阈值。
 
 ## 6. 复现指南
 
@@ -249,3 +251,72 @@ python scripts/archive_run.py --run_id dca_fuse_arforensics_test_sub500 \
 `third_party/PRADA/model_weights/{var,rar,switti}/`、
 `pretrained/open_magvit2/imagenet_256_L.ckpt`（Open-MAGVIT2，
 代码见 `third_party/SEED-Voken`）。
+
+## 7. 非参数亲和力校准（pilot）
+
+当前历史结果使用 `S_min = -min(z_k)`，隐含每个 tokenizer 的 qerr
+可由均值/标准差充分标准化的假设，并且 tokenizer 数量增加时没有显式
+校正极值搜索。`analysis/ctad_affinity.py` 提供一个可比较的非参数版本：
+
+1. 将仅含真实图像的 validation qerr 按固定随机种子拆成互斥的 reference-fit
+   与 calibration 子集；经验分布只在 fit 子集上估计。
+2. 每个 tokenizer 的低尾概率用带 add-one 修正的经验 CDF
+   \(\hat F_k(q)=(1+\#\{q_i\le q\})/(n_k+1)\) 估计，并定义
+   \(A(x)=\max_k[-\log \hat F_k(q_k(x))]\)。
+3. 用 calibration 子集上的 \(A\) 分数构造上尾 conformal p-value。
+   检测阈值 \(p\le\alpha\) 在真实 calibration 与未来真实样本可交换、
+   且 fit/calibration 独立的条件下具有有限样本边际错误率控制；这不保证
+   在数据集偏移、不同真实分布或有依赖的重复图像下仍然成立。
+
+`analysis/ctad_feasibility.py` 会并列输出此分数的 AUROC、校准集大小以及
+测试真实图像/生成图像的观测 FPR/TPR。连续 \(A(x)\) 用于排序指标，conformal
+p-value 用于 operating-point 判定；离散 p-value 不应用作主要 AUROC
+分数。它是新实验而非对已有 DCA-Fuse 数值的重新解释，必须重新运行并
+独立报告，不能将新旧结果拼接成单一结果表。
+
+`engine.metrics.paired_bootstrap_delta` 可对两组逐样本对齐的分数计算
+配对分层 bootstrap 的 metric 差值区间。只有在样本 ID、标签和顺序完全
+一致时才能使用；若同一真实图被多个生成器重复复用，应按图像/来源做
+group bootstrap，而不能把重复行当作独立观测。
+
+在固定 seed=42、500 张 fit real + 500 张 calibration real 的 500/类
+pilot 上，经验尾部连续分数的 macro AUROC 为 0.7003，旧 `S_min` 为
+0.6952；最差生成器 AUROC 分别为 0.5585 和 0.5594。以 nominal
+5% conformal p-value 为 operating point，独立 test real 上观测 FPR 为
+3.89%，但各生成器 TPR 仅 2.8%–37.0%。这是小样本机制检验，不构成
+open-set 或检测性能提升的证据；仍需 full-scale、外部数据与多 seed 验证。
+
+## 8. 全量路径配对重评估（84k）
+
+在 \(\alpha=0.7\) 设置下，`analysis/dca_fuse_eval_full.py` 现按归一化图像
+路径连接 UnivFD 与 CTAD 分数；validation 阈值和通道标准化均由当前
+\(\alpha\) 重新计算。Overall
+指标使用 42,000 个 real 一次、与 42,000 个 fake 合并，避免在逐生成器
+循环中重复计入 real。输出的 84,000 行预测路径唯一。
+
+| 生成器 | DCA-Fuse AUROC | paired ΔAUROC vs. UnivFD (95% CI) |
+|---|---:|---:|
+| Infinity | 0.8243 | -0.00617 [-0.00801, -0.00445] |
+| Janus_Pro | 0.9360 | -0.00016 [-0.00117, 0.00084] |
+| LlamaGen | 0.9612 | +0.00126 [+0.00055, +0.00199] |
+| Open_MAGVIT2 | 0.9054 | +0.01914 [+0.01778, +0.02057] |
+| RAR | 0.9706 | +0.00083 [+0.00013, +0.00155] |
+| Switti | 0.8429 | -0.00780 [-0.00927, -0.00636] |
+| VAR | 0.9489 | -0.00710 [-0.00798, -0.00629] |
+| **Overall** | **0.91275** | **+0.000001 [-0.000670, +0.000687]** |
+
+Overall paired CI 跨 0，故当前结果不支持整体 AUROC 优于 UnivFD。Open-MAGVIT2
+上的提升显著，但 Switti、VAR、Infinity 也有显著回退；最合适的结论仍是
+generator-dependent 的互补性，而不是总体 SOTA。paired bootstrap 以路径为
+配对键，按标签分层重采样；若不同路径实际指向重复内容，仍需改用内容/来源
+group bootstrap。
+
+归档：`reports/runs/dca_fuse_arforensics_test_full_recalibrated/`（metrics、
+84k predictions、manifest、environment 和 config）；原始输出位于
+`outputs/dca_fuse/results_test_full_recalibrated.json` 与
+`outputs/dca_fuse/results_test_full_recalibrated_predictions.csv`。
+
+```bash
+python analysis/dca_fuse_eval_full.py --alpha 0.7 --n_boot 1000 \
+    --out outputs/dca_fuse/results_test_full_recalibrated.json
+```

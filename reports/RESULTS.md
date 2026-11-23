@@ -151,3 +151,33 @@
 
 - DIRE test 全量 84k：**RUNNING**（GPU1）
 - PRADA T2I 全量（官方 predict.py，DARG-adapted-real-v1）：**RUNNING**（GPU0）
+
+## 11. DCA-Fuse 路径配对重评估（84k，α=0.7）
+
+归档：`reports/runs/dca_fuse_arforensics_test_full_recalibrated/`；
+原始复评结果：`outputs/dca_fuse/results_test_full_recalibrated.json`；
+逐样本分数：`outputs/dca_fuse/results_test_full_recalibrated_predictions.csv`。
+84,000 行预测按图像路径连接 UnivFD 与 CTAD，包含 42,000 real 与 42,000 fake；
+overall 只计入一次 real pool。阈值在当前 α 对应的 validation fused scores 上
+重新用 Youden's J 校准（0.80462）。
+
+| 生成器 | DCA-Fuse AUROC | paired ΔAUROC vs. UnivFD (95% CI) |
+|---|---:|---:|
+| Infinity | 0.8243 | -0.00617 [-0.00801, -0.00445] |
+| Janus_Pro | 0.9360 | -0.00016 [-0.00117, 0.00084] |
+| LlamaGen | 0.9612 | +0.00126 [+0.00055, +0.00199] |
+| Open_MAGVIT2 | 0.9054 | +0.01914 [+0.01778, +0.02057] |
+| RAR | 0.9706 | +0.00083 [+0.00013, +0.00155] |
+| Switti | 0.8429 | -0.00780 [-0.00927, -0.00636] |
+| VAR | 0.9489 | -0.00710 [-0.00798, -0.00629] |
+| **Overall** | **0.91275** | **+0.000001 [-0.000670, +0.000687]** |
+
+Overall CI 跨 0，故不能声称总体 AUROC 提升。Open_MAGVIT2 上的收益与
+Switti/VAR/Infinity 上的退化同时存在，支持“生成器相关的互补信号”，
+而非整体 SOTA。若多个路径代表相同底层图像，后续应使用内容/来源级
+cluster bootstrap。
+
+同日完成的经验尾部 CTAD pilot（500 fit real + 500 calibration real，500/类 test）
+macro AUROC 为 0.7003（旧 `S_min`: 0.6952），最差生成器 0.5585（旧
+`S_min`: 0.5594）；nominal 5% conformal p-value 在 test real 上观测 FPR
+为 3.89%。此结果仅属探索性，不作为 open-set claim。
