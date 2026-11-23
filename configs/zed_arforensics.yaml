@@ -9,7 +9,7 @@ method:
   name: zed
   image_size: null
   crop_size: 256
-  statistic: abs_delta01
+  statistic: abs_delta02
   entropy_chunk: 16
 
 train:

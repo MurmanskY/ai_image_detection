@@ -101,8 +101,14 @@ class ZEDModel(nn.Module):
         statistics = {
             "d0": d0,
             "abs_d0": d0.abs(),
+            "d2": d2,
+            "abs_d2": d2.abs(),
             "delta01": d0 - d1,
             "abs_delta01": (d0 - d1).abs(),
+            "delta02": d0 - d2,
+            "abs_delta02": (d0 - d2).abs(),
+            "delta12": d1 - d2,
+            "abs_delta12": (d1 - d2).abs(),
         }
         if self.statistic not in statistics:
             raise ValueError(f"未知 ZED 统计量: {self.statistic}")
