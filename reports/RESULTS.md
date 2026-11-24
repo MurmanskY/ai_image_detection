@@ -368,3 +368,52 @@ DINOv2 局部 patch 特征对 token 级机制证据图没有任何可迁移的�
 （MPID，ρ≈0.03），也不能作为空间图从 DINOv2 局部特征解码（STEM-AR，
 margin=0）。机制证据与冻结视觉表征之间的不可解码性在两种粒度上均成立，
 机制蒸馏路线（v7/v8 候选）整体终止。
+
+## 15. RACE 复现（v8 §9 P0-A，arXiv:2611.27161，预印本无官方代码）
+
+脚本：`analysis/race_p0.py`（+诊断 `race_cfe_diagnose.py`、缓存迁移
+`race_reextract_clip.py`）；结果：`outputs/race/race_p0.json`、
+`race_cfe_diagnose.json`；复现说明：`baselines/reproduction/race.md`。
+**复现级别：reimplementation-approximate**（无官方代码；门控/投影头结构、
+子损失定义、NP-RSR 描述子统计均为按论文文字的最直接解释，逐条记录在
+脚本头与 race.md）。协议：ARForensics real（train+val 7000 张，划分为
+3500 train / 1000 dev / 2500 cal）替代论文 mixed authentic dataset；
+test 7 生成器 × 1000/类（seed 0，**race-p0-1000 示例**），orig+JPEG95。
+
+### 总体结果（本复现，非论文数值）
+
+| 指标 | orig | JPEG95 |
+|---|---:|---:|
+| macro AUROC | 0.744 | 0.547 |
+| worst（VAR） | 0.282 | 0.420 |
+| FPR@τ（校准名义 5%） | 4.1–5.7% | **29–33%** |
+
+分量 AUROC（orig）：NP-RSR 0.65–0.985（最强）；PRP 0.58–0.93；
+**CFE 检索 0.096–0.461（全生成器反向）**。校准在 codec 内成立
+（orig 测试 real 的 FPR≈名义 5%），JPEG95 后真实分数分布整体漂移、
+校准阈值失效——real-anchored 统计校准对 real 侧 codec 漂移脆弱。
+
+### 关键发现：真实参考检索在本协议下反向
+
+- 冻结 DINOv2 depth-12 KNN 检索：macro **0.304**（反向）；
+  冻结 CLIP pooled：0.611；拼接：0.592；CFE 训练后学习码仍反向
+  （α 权重最终 DINO 0.910 / CLIP 0.090）。
+- 解读：ARForensics 的 AR 生成图（ImageNet 内容/提示驱动）在冻结视觉
+  空间中**比 ImageNet-test 真实图更接近 ImageNet-val 派生的真实参考库**
+  ——"真实邻近性"在该数据集上不是有效的真假证据，这是数据/协议属性，
+  不是 CFE 实现问题（冻结变体同样反向）。
+- 因此本协议无法验证论文 ARForensics 94.69% 的数值；差距主要来源是
+  真实图像池与 benchmark 协议差异，其次才是近似复现的实现偏差。
+
+### 参照（同 subsample-1000，orig）
+
+UnivFD（best.pth head 于同一批 CLIP 特征）：macro **0.908**；
+RIGID（84k 全量归档）：0.7407；RACE 本复现：0.744（≈RIGID 量级，
+远低于 UnivFD）。paired bootstrap 未做（记录在后续工作）。
+
+### 复现过程事件（透明记录）
+
+初版自定义 CLIP 中间层前向误用 LND 布局（当前 open_clip 为 batch-first），
+导致 CLIP 分支特征为常量、首轮 CFE 无效；已修复（修复后 pooled 与官方
+前向 cos=1.0）并重提特征重跑，本表为修复后结果。该 bug 仅影响
+`analysis/race_p0.py` 自定义前向，不影响 MPID/PARD（官方前向）。

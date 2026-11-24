@@ -146,20 +146,21 @@ def dino_depth_cls(dino, x):
 
 @torch.no_grad()
 def clip_depth_cls(visual, x):
-    """返回 (B,4,768) 裸 CLS {6,12,18,24} 与最终 pooled (B,768)。"""
+    """返回 (B,4,1024) 裸 CLS {6,12,18,24} 与最终 pooled (B,768)。
+    注意: 当前 open_clip 版本全程 batch-first (NLD), 不要做 LND permute。"""
     x = visual.conv1(x)
     x = x.reshape(x.shape[0], x.shape[1], -1).permute(0, 2, 1)
     cls = visual.class_embedding.to(x.dtype) + torch.zeros(
         x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device)
     x = torch.cat([cls, x], dim=1) + visual.positional_embedding.to(x.dtype)
-    x = visual.ln_pre(x).permute(1, 0, 2)
+    x = visual.ln_pre(x)
     outs = []
     for i, blk in enumerate(visual.transformer.resblocks):
         x = blk(x)
         if i in DINO_IDX:
-            outs.append(x[0])
-    x = x.permute(1, 0, 2)
-    pooled = visual.ln_post(x[:, 0])
+            outs.append(x[:, 0])
+    x = visual.ln_post(x)
+    pooled = x[:, 0]
     if visual.proj is not None:
         pooled = pooled @ visual.proj
     return torch.stack(outs, dim=1), pooled
@@ -236,7 +237,9 @@ def extract_vit_aug(dino, clip, paths, device, batch_size=128, tag=""):
                 T.RandomHorizontalFlip(),
                 T.ColorJitter(0.2, 0.2),
                 T.ToTensor()])
-            torch.manual_seed(hash(str(p)) % (2 ** 31))
+            import hashlib
+            torch.manual_seed(int(hashlib.md5(
+                str(p).encode()).hexdigest()[:8], 16))
             x01 = tf(img)
             xs_d.append(_norm_dino(x01.clone()))
             xs_c.append(_norm_clip(x01.clone()))
@@ -294,16 +297,23 @@ def residual_stats(r):
     for i in range(B):
         x = r[i, 0, 16:-16, 16:-16].cpu().numpy()
         flat = x.ravel()
-        s = [flat.mean(), flat.std(), float(skew(flat)),
-             float(kurtosis(flat))]
-        # 方向自相关 lag1
+        if flat.std() < 1e-12:
+            s = [float(flat.mean()), 0.0, 0.0, 0.0]
+        else:
+            s = [flat.mean(), flat.std(), float(skew(flat)),
+                 float(kurtosis(flat))]
+        # 方向自相关 lag1 (零方差平坦区域 -> 0)
         for dx, dy in ((0, 1), (1, 0), (1, 1), (1, -1)):
             a = x[:max(0, x.shape[0] - abs(dx)),
                   :max(0, x.shape[1] - abs(dy))]
             b = np.roll(np.roll(x, dx, 0), dy, 1)[
                 :max(0, x.shape[0] - abs(dx)),
                 :max(0, x.shape[1] - abs(dy))]
-            s.append(float(np.corrcoef(a.ravel(), b.ravel())[0, 1]))
+            af, bf = a.ravel(), b.ravel()
+            if af.std() < 1e-12 or bf.std() < 1e-12:
+                s.append(0.0)
+            else:
+                s.append(float(np.corrcoef(af, bf)[0, 1]))
         # 相位象限能量
         F = np.fft.fftshift(np.fft.fft2(x))
         mag2 = np.abs(F) ** 2
@@ -438,7 +448,7 @@ def train_cfe(feats_tr_v0, feats_tr_v1, device, epochs=40, batch=256,
         br[b].mu_pr.copy_(f[:, 1].mean(0))
         br[b].sd_pr.copy_(f[:, 1].std(0) + 1e-6)
     dec = nn.Sequential(nn.Linear(192, 512), nn.GELU(),
-                        nn.Linear(512, 768)).to(device)
+                        nn.Linear(512, feats_tr_v0["clip"].shape[-1])).to(device)
     params = list(dec.parameters())
     for b in br.values():
         params += list(b.parameters())
@@ -627,6 +637,12 @@ def main():
 
     feats = dict(np.load(feats_path))
     nprsr = dict(np.load(nprsr_path))
+    n_nan = sum(int(np.isnan(v).sum()) for v in nprsr.values())
+    if n_nan:
+        print(f"NP-RSR 描述子含 {n_nan} 个 NaN (平坦 patch 的零方差相关), "
+              f"nan_to_num 清洗", flush=True)
+        nprsr = {k: np.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0)
+                 for k, v in nprsr.items()}
 
     def get(prefix, codec="orig"):
         return {"dino": feats[f"{prefix}::{codec}::dino"],
@@ -663,7 +679,7 @@ def main():
     # ---- S4: 检索分数 a(x) / PRP s_P / NP-RSR s_R ----
     print("S4 计算分数...", flush=True)
     # dev 上的分量尺度 -> α 与 Z 统计
-    dev = get("dev_real")
+    dev = get("dev_real", "v0")
     dev_codes = codes(dev)
     d12_dev = Fn.normalize(torch.tensor(dev["dino"][:, 1]),
                            dim=-1).numpy()
@@ -742,7 +758,7 @@ def main():
             s["sR"], *z_sR)
 
     # 校准 (conformal, 名义 FPR 5%)
-    cal_s = all_scores(get("cal_real"), nprsr["cal_real"])
+    cal_s = all_scores(get("cal_real", "v0"), nprsr["cal_real"])
     S_cal = final_score(cal_s)
     n_cal = len(S_cal)
     j = int(np.ceil((n_cal + 1) * 0.95))
