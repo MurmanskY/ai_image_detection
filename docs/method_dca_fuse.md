@@ -365,3 +365,20 @@ RIGID 单噪声，低层特征略优于深层。详见 `reports/RESULTS.md` §12
 
 至此两条免训练新机制主线（CTRF、PARD）均按预注册标准终止；
 监督式 UnivFD 仍为最强基线。
+
+## MPID（v7 指南主线，P0）：负结果
+
+按 `deep-research-report-v7.pdf` 的主线 MPID（机制特权不变蒸馏）做了 P0：
+`analysis/mpid_p0.py`。PRADA 完整分数作训练特权教师（离线复算与官方一致），
+CLIP ViT-L/14 冻结特征 + MLP 学生，LOGO-4，BCE-only vs BCE+MSE(λ=1)。
+
+结果（`outputs/mpid/mpid_p0.json`，mpid-p0-1000 示例协议）：
+macro AUROC A=0.9980 vs B=0.9978（增益 -0.0002，要求 ≥+0.02），0/4 折提升，
+JPEG95 增益 -0.0001——**GO 三条均未通过，按 v7 停止**。
+
+关键诊断：(1) Ridge 探针显示 PRADA 机制分数从冻结 CLIP 特征**不可线性解码**
+（held-out 生成器 Spearman ρ 中位 0.026），蒸馏前提不成立；(2) BCE-only 已
+近饱和（0.9965–0.9989），协议无增益余量；(3) 蒸馏反而提高生成器身份探针
+准确率（0.94→0.97），与 invariance 目标相反。详见 `reports/RESULTS.md` §13。
+
+至此三条免训练/特权监督新机制主线（CTRF、PARD、MPID）均按预注册标准终止。
