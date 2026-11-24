@@ -68,6 +68,29 @@
 
 与论文 T2I 检测性能一致，复现成功。单特征基线（gt_llh_diff / icas / quant_err / aeroblade）见同目录 CSV。
 
+### T2I 全量（每目录 1000 张，FROZEN）
+
+官方 predict.py，官方预训练评分函数（train_size=0），real 为
+DARG-adapted-real-v1（ARForensics real 1000 张替代 RAISE-1k，协议偏差同上）。
+特征缓存 20/20：`outputs/prada_t2i/features/`；
+结果目录：`outputs/prada_t2i/2026-11-24_17-28-25/`
+（运行过程三次因服务器其他用户进程挤占显存 OOM，最终经
+`scripts/run_prada_t2i_when_free.sh` 看门狗在空闲窗口完成，缓存复用无重复计算）。
+
+| fake 生成器 | PRADA AUROC | gt_llh_diff | icas | quant_err | aeroblade |
+|---|---:|---:|---:|---:|---:|
+| infinity_2b | 0.9941 | 0.7672 | 0.5435 | 0.4793 | 0.8450 |
+| janus_1b | 0.9840 | 0.9712 | 0.9296 | 0.9976 | 0.9587 |
+| llamagen_xlstage2 | 0.9860 | 0.2374 | 0.2751 | 0.9961 | 0.9631 |
+| switti_1024 | 0.9949 | 0.4589 | 0.8620 | 0.4335 | 0.5842 |
+| **macro** | **0.9898** | 0.6087 | 0.6525 | 0.7267 | 0.8378 |
+
+结论：PRADA 全量 T2I 检测 macro AUROC 0.9898，与 tiny-50 示例（0.99+）
+一致，为目前最强的 AR 专用检测参照（跨 T2I 生成器稳定 ≥0.98）。
+单特征基线均不稳定（如 gt_llh_diff 在 llamagen 上仅 0.237、方向因生成器
+而异），印证 PRADA 多特征似然比评分函数的必要性。
+归因混淆矩阵见 `cfm_prada_test.pdf`。
+
 ### C2I tiny-50 示例（FROZEN，标注 `tiny-50-示例`）
 
 每目录 50 张示例子集，官方预训练评分函数（train_size=0）。
@@ -152,7 +175,7 @@
 ## 10. 进行中的全量实验
 
 - DIRE test 全量 84k：已完成，overall AUC 0.830 / AP 0.838（迁移测试，见第 4 节）
-- PRADA T2I 全量（官方 predict.py，DARG-adapted-real-v1）：**FAILED**（特征缓存完成后 BLIP2 prompt 提取阶段 OOM，特征已缓存可续跑）
+- PRADA T2I 全量（官方 predict.py，DARG-adapted-real-v1）：**已完成**，macro AUROC 0.9898（见第 5 节）
 - CTRF 关系结构 MVP（v5 指南主线）：已验证，**负结果**——Mahalanobis 关系版 macro 0.694 vs S_min 0.695 持平，未过 GO 门槛（macro +0.03 / worst-gen +0.02），按预注册标准停止该主线。详见 `docs/method_dca_fuse.md` 末节。
 
 ## 11. DCA-Fuse 路径配对重评估（84k，α=0.7）

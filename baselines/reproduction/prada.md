@@ -23,3 +23,11 @@
 
 - vendored; T2I/C2I 已端到端运行 (特征缓存于 `outputs/prada_{t2i,c2i}/features/`)
 - 未接入统一 eval.py, 结果由官方脚本产出
+- **T2I 全量已完成** (每目录 1000 张, train_size=0, 官方预训练评分函数):
+  macro AUROC **0.9898** (infinity_2b 0.9941 / janus_1b 0.9840 /
+  llamagen_xlstage2 0.9860 / switti_1024 0.9949),
+  结果目录 `outputs/prada_t2i/2026-11-24_17-28-25/`, 详见 `reports/RESULTS.md` §5
+- 长跑任务曾被服务器其他用户进程挤占显存导致 OOM ×3; `scripts/run_prada_t2i_when_free.sh`
+  看门狗可等待空闲窗口自动续跑 (特征缓存复用)
+- `src/prada/prompt_extraction.py` 结尾已加 `del model_obj + gc.collect() + empty_cache()`
+  (修复 BLIP2 与 wrapper 同时驻留导致的 OOM)
