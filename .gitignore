@@ -28,3 +28,4 @@ third_party/SReC/datasets/
 *.tar
 *.tar.gz
 *.zip
+third_party/TruFor/

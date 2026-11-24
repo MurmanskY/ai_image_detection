@@ -298,3 +298,73 @@ GO=false，按 v7 停止条件终止 MPID 主线**。
 强参照（0.9898）与数据审计。若未来重启机制蒸馏，需要：(a) 换用更接近
 机制信号的表征（如 tokenizer 域特征）而非语义 CLIP；(b) 选择未饱和的
 评测协议（更弱的 backbone 或更难的 real/fake 分布）。
+
+## 14. v8 复核与 STEM-AR 诊断（MPID 修正版 + DARG 审计 + STEM-AR）
+
+### 14.1 MPID 严格 teacher holdout 重跑（v8 §2.2 修正）
+
+脚本：`analysis/mpid_p0_strict.py`；结果：`outputs/mpid/mpid_p0_strict.json`。
+修正：(a) 每折教师目标改为 max over 3 个非 held-out PRADA 模型（原版
+教师集合包含 held-out 模型）；(b) 生成器身份探针改在独立 test 折评估
+（原版为训练集内评估）。其余协议不变。
+
+| 指标 | BCE-only | +机制蒸馏（严格教师） |
+|---|---:|---:|
+| LOGO macro AUROC | 0.9980 | 0.9979（增益 -0.0002） |
+| 提升折数 | — | 1/4（要求 ≥3） |
+| JPEG95 增益 | — | -0.0001（要求 >0） |
+| genprobe（独立测试） | 0.869 | 0.885 |
+
+**结论不变：GO=false。** v8 指出的训练集内探针高估成立（0.94→0.87），
+但蒸馏仍使独立测试 genprobe 上升（0.869→0.885），方向性结论保持；
+严格教师 holdout 下教师可预测性更低（Spearman 中位 0.010）。
+
+### 14.2 DARG T2I 难度审计（v8 §2.3，P0-B）
+
+脚本：`analysis/darg_audit.py`；结果：`outputs/mpid/darg_audit.json`。
+
+- **近重复泄漏：无。** train/test 目录内 pHash≤6 近重复对 0（janus 1 对
+  边界值 hamming=6）；real↔fake 跨目录 0 对（min hamming ≥10）。
+- **元数据/格式 shortcut：极显著。** 仅用 [log文件大小, 宽, 高, 元数据
+  键数, 颜色模式] 的逻辑回归 5 折 CV，real vs 每个生成器 AUC 全部
+  = **1.0000**。原因：real 为 JPEG/RAISE 风格多种分辨率，全部 fake 为
+  PNG 固定方形分辨率（1024²/384²/512²）。
+- 但像素级 codec-matched（双方 JPEG95，CLIP 管线统一到 224）下 MPID
+  BCE-only 仍 0.9974——**简单性主要来自内容域差异**（RAISE 真实照片
+  vs T2I 合成内容的语义域差），而非压缩格式本身。
+- 结论：DARG T2I LOGO 0.998 是"当前数据划分下的表现"（v8 原话），
+  不能解释为开放世界未见生成器检测已解决；后续主实验应采用
+  codec+domain 匹配协议。DARG 原始 prompt 本地不可得，prompt 级审计
+  以图像级近重复替代（边界记录）。
+
+### 14.3 STEM-AR 机制图可迁移性诊断（v8 §9 P0-C）：负结果
+
+脚本：`analysis/stem_ar_p0.py`；结果：`outputs/mpid/stem_ar_p0.json`。
+
+token-to-grid 验证（通过）：infinity_2b（13 scales 全平方，取原生
+16×16）、switti_1024（14 scales 全平方，取原生 16×16）、
+llamagen_xlstage2（32×32→2×2 池化，精确）、janus_1b（24×24→面积
+插值，近似已记录）；光栅顺序为 VAR/AR 标准生成顺序。
+
+教师图 = 各生成器自身模型的 e(k,t)=cond−uncond 最细尺度 16×16 证据图；
+学生特征 = DINOv2 ViT-S/14 depth-11 patch tokens（256×384）；探针 =
+per-cell 闭式 ridge（对偶形式，λ=1）；LOGO-4，仅 fake；shuffled
+位置对照；orig 与 jpeg95 分别训练评估。
+
+| codec | held-out | ρ(real) | ρ(shuffled) |
+|---|---|---:|---:|
+| orig | infinity_2b | 0.029 | 0.029 |
+| orig | janus_1b | 0.035 | 0.035 |
+| orig | llamagen_xlstage2 | -0.004 | -0.004 |
+| orig | switti_1024 | 0.021 | 0.021 |
+| jpeg95 | （四折同型） | ≈0.018 macro | 完全相同 |
+
+**所有折、两种 codec 下 ρ(real) 与 ρ(shuffled) 完全相等（margin=0.0）**：
+DINOv2 局部 patch 特征对 token 级机制证据图没有任何可迁移的空间预测
+能力（微弱 ρ≈0.02 为探针噪声，与位置对齐无关）。预注册 GO 三条全部
+失败，**按 v8 停止条件终止 STEM-AR**。
+
+与 MPID 联合解读：PRADA 机制证据既不能作为标量从 CLIP 全局特征解码
+（MPID，ρ≈0.03），也不能作为空间图从 DINOv2 局部特征解码（STEM-AR，
+margin=0）。机制证据与冻结视觉表征之间的不可解码性在两种粒度上均成立，
+机制蒸馏路线（v7/v8 候选）整体终止。

@@ -382,3 +382,23 @@ JPEG95 增益 -0.0001——**GO 三条均未通过，按 v7 停止**。
 准确率（0.94→0.97），与 invariance 目标相反。详见 `reports/RESULTS.md` §13。
 
 至此三条免训练/特权监督新机制主线（CTRF、PARD、MPID）均按预注册标准终止。
+
+## MPID 严格版修正与 STEM-AR（v8 复核）：均负结果
+
+**MPID 严格 teacher holdout**（`analysis/mpid_p0_strict.py`，v8 §2.2 修正）：
+教师集合逐折排除 held-out 模型、genprobe 改独立测试评估后，结论不变
+（macro 增益 -0.0002，0.869→0.885 leakage 略升，GO=false）。
+
+**DARG T2I 难度审计**（`analysis/darg_audit.py`，v8 §2.3）：无近重复泄漏，
+但元数据/格式可完美分类（AUC 1.0000：real JPEG 多分辨率 vs fake PNG 固定
+方形分辨率）；codec-matched 后仍 0.997——简单性源自内容域差，
+DARG T2I LOGO 0.998 仅为"当前划分下的表现"。
+
+**STEM-AR 诊断**（`analysis/stem_ar_p0.py`，v8 §9 P0-C）：token-to-grid
+映射验证通过（四模型 scale_lengths 均为完全平方或精确池化）；但 per-cell
+ridge 探针在 LOGO 全部 4 折、orig 与 jpeg95 两种 codec 下
+ρ(real) ≡ ρ(shuffled)（margin=0.0）——token 级机制证据图从 DINOv2 局部
+特征完全不可预测，**按 v8 停止**。
+
+联合结论：PRADA 机制证据对冻结视觉表征的不可解码性在标量（MPID）与
+空间图（STEM-AR）两种粒度上均成立，机制蒸馏路线整体终止。
