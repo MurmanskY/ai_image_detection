@@ -591,3 +591,99 @@ mean 0.861 / lowrank 0.813 → QF50 raw 0.352 / mean 0.669。mean-correction
 际高度稳定（主角度均值 1.9°）。初版 30° 主角度 GO 判据对近似秩一响
 应过严，修正为 per-view mean response 余弦判据（≥0.9），原始判据保
 留为诊断量。两次修正均记录在 `outputs/contra/contra_p0.json`。
+
+## 19. SACR P0（v11）：**GO=false，按预注册标准停止方法扩展**
+
+脚本：`analysis/sacr_p0.py`；测试：`tests/test_sacr_p0.py`；结果：
+`outputs/sacr/sacr_p0.json`、`canonical.json`、`complexity_audit.json`。
+逐图预测：`scores_seed{0,1,2}.npz` 与
+`cross_scores_seed{0,1,2}_{qf85,qf75}.npz`。本节为
+**sacr-p0-1000 / cross-300 示例**，不是 84k 全量结果。
+
+### 19.1 方法与严格协议
+
+SACR 不再投影删除 CoNTra 的 nuisance 方向，而是保留
+`z_parallel=U^T r` 并建模其条件真实分布。U 由 reference real 的
+JPEG/resize 配对差分估计（k=6）；C 仅评共享方向，D 评
+`z_parallel + λ z_perp`。条件变量包括文件大小、解码像素复杂度、codec、
+像素+codec；评分器包括条件 Gaussian/Mahalanobis、conditional kNN、
+条件分位数。模型分支、评分器和 λ 只在独立 validation 上选择。
+
+- clean manifest 剔除旧 P0 中 3 张已知跨 split 重复真实图：reference
+  3500、calibration 2498；validation 999 real + 1000 fake；三个 seed
+  真正重划 reference/calibration，而非仅更换 bootstrap 随机数。
+- 测试为 7 生成器 × 1000 real/fake，统一 JPEG95；跨 codec 为
+  Infinity/Open_MAGVIT2/VAR × 300 real/fake，JPEG85/75。
+- 像素复杂度从统一解码后的三个 128×128 patch 计算：多尺度梯度能量、
+  局部熵、Haar 高频能量、DCT 熵、边缘密度。不是文件元数据。
+- ESS<50 输出 unsupported/abstain；按 reference 局部熵中位数组内
+  conformal 校准。AUROC 在 supported 样本上计算，同时报告 coverage。
+- 预注册主标准：pixel SACR 相对每 seed 较强的 CARF-A(full/size_only)
+  三种子平均 Δmacro≥+0.02、逐图 paired bootstrap CI 下界>0、每 seed
+  Δ>0；≥5/7 不退化；FPR∈[3%,7%]；coverage≥95%；JPEG85/75 仍有收益。
+  仅 file-size 有效或复杂度自身标签 AUC≥0.80 均不能通过 GO。
+
+三个 seed 的 pixel 条件均独立选择 **D + conditional kNN + λ=0.25**；
+没有选择测试集上的最优配置。
+
+### 19.2 Canonical JPEG95：三种子平均 AUROC
+
+| 生成器 | M0 | CARF-A full | CARF-A size-only | SACR file-size | SACR pixel | SACR codec |
+|---|---:|---:|---:|---:|---:|---:|
+| Infinity | 0.890 | 0.870 | 0.894 | 0.928 | 0.851 | 0.864 |
+| Janus_Pro | 0.837 | 0.928 | 0.945 | 0.930 | 0.817 | 0.821 |
+| LlamaGen | 0.733 | 0.841 | 0.868 | 0.920 | 0.802 | 0.747 |
+| Open_MAGVIT2 | 0.631 | 0.692 | 0.718 | 0.758 | 0.756 | 0.647 |
+| RAR | 0.619 | 0.680 | 0.706 | 0.759 | 0.753 | 0.631 |
+| Switti | 0.776 | 0.896 | 0.889 | 0.823 | 0.809 | 0.791 |
+| VAR | 0.643 | 0.716 | 0.742 | 0.769 | 0.781 | 0.653 |
+| **macro** | **0.733** | **0.803** | **0.823** | **0.841** | **0.796** | **0.736** |
+
+SACR file-size 虽达到 0.841，但平均 coverage 仅约 92.7%，且违反“核心
+方法不能依赖文件大小”的预设，不能作为成功结果。SACR pixel coverage 为
+99.7%，FPR 三种子为 5.4%/5.7%/6.2%，但 macro TPR@1%FPR 仅
+0.26%–0.29%；校准合格不能弥补判别力不足。
+
+### 19.3 GO 判定
+
+| 条件 | 实际 | 判定 |
+|---|---|---|
+| 相对强 CARF-A 平均 Δ≥+0.02 | **−0.0275**，95%CI [−0.0351,−0.0280] | ✗ |
+| 三个 seed 各自 Δ>0 | −0.0115 / −0.0392 / −0.0319 | ✗ |
+| ≥5/7 生成器不退化 | 3/7、3/7、3/7 | ✗ |
+| FPR∈[3%,7%]、coverage≥95% | FPR 5.4%–6.2%，coverage 99.7% | ✓ |
+| JPEG85/75 收益与 FPR | AUROC 有提升，但部分 seed FPR 7.15%/7.25% | ✗ |
+| 复杂度不是明显标签捷径 | validation AUC 0.836；within-source 0.817 | ✗ |
+
+**GO=false。** 主 pixel 路线在严格协议下未超过 CARF-A，按 v11 停止
+SACR 方法扩展，不进入 84k、外部 benchmark 或额外模块堆叠，也不开展
+RA-Det/DEAR/Forensic Twins 的 SACR 同协议后续对比。
+
+### 19.4 跨 codec 分解：增益主要来自同质量参考，而非像素条件
+
+| 方法 | 参考条件 | JPEG85 macro | JPEG75 macro |
+|---|---|---:|---:|
+| CARF-A size-only | QF95 reference | 0.546 | 0.477 |
+| SACR pixel | QF95 reference | 0.348 | 0.312 |
+| SACR codec-only | 同质量 reference | 0.768 | 0.690 |
+| SACR pixel+codec | 同质量 reference + 像素复杂度 | 0.786 | 0.711 |
+
+pixel+codec 相对 CARF-A 的表观提升为 +0.240/+0.234，但 codec-only 已
+解释其中绝大部分。相对 codec-only，三种子增量在 JPEG85 为
+−0.009/+0.024/+0.040，在 JPEG75 为 +0.012/+0.013/+0.039；增益不稳定，
+且不是 canonical 上所需的 +0.02 可重复优势。同质量真实参考本身是重要
+的协议变量，不能将其贡献归因于 SACR 的像素条件创新。
+
+### 19.5 结论与论文定位
+
+1. CoNTra 的“nuisance–signal overlap”科学发现仍成立，但 SACR 的
+   “干预子空间 + 像素复杂度 + 条件评分”没有转化为超过 CARF-A 的检测器。
+2. CARF-A 的收益主要来自文件大小/内容复杂度代理；SACR 的可解释像素
+   统计并没有消除标签关联（组内审计 AUC 仍约 0.82），也没有取得更好
+   的条件分布估计。这是机制层面的负结果，不是调参不足。
+3. 现阶段保留 CARF-A 为唯一通过协议修复后 GO 的新方法基线；论文主线
+   应回到**条件分布错配、nuisance–signal coupling、校准与参考协议的
+   系统性分析**，不再为了 ICML 方法论文继续叠加检测模块。
+4. 验证：37 项项目测试通过；另外从逐图 NPZ 独立重算 126 组 canonical
+   AUROC/coverage，全部与 JSON 一致；6 个跨 codec 文件均含 15 种方法
+   × 600 张的完整逐图分数。
