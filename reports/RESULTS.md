@@ -687,3 +687,104 @@ pixel+codec 相对 CARF-A 的表观提升为 +0.240/+0.234，但 codec-only 已
 4. 验证：37 项项目测试通过；另外从逐图 NPZ 独立重算 126 组 canonical
    AUROC/coverage，全部与 JSON 一致；6 个跨 codec 文件均含 15 种方法
    × 600 张的完整逐图分数。
+
+## 20. v12 P0/P1：跨特征、跨 codec 与 DARG 外部复核
+
+脚本：`analysis/carf_protocol_p1.py`、`analysis/forensic_bank.py`；理论：
+`docs/nuisance_signal_coupling.md`；结果：
+`outputs/carf_protocol/carf_protocol_p1.json`；外部重复审计：
+`external_duplicate_audit.json`。本节为
+**carf-p1-arforensics-1000/cross-300 + darg-t2i-300 示例**，不是全量评估。
+
+### 20.1 固定协议与独立表示
+
+- ARForensics 沿用 SACR clean manifest：3500 reference、2498 calibration、
+  1000/类 test，三个真正重划 reference/calibration 的 seed。
+- 外部数据为本地 DARG T2I：1000 RAISE real 每 seed 分为
+  400 reference/300 calibration/300 test；5 个 AR 生成器各 300 fake。
+  2500 张使用图像中 SHA256 重复=0、pHash 完全重复=0、真实图跨 split
+  pHash Hamming≤4 候选=0。
+- 两种表示：(1) 既有 Noiseprint++ NP-RSR r24；(2) 独立固定高通滤波器组
+  （水平/垂直二阶差分与 Laplacian），每个滤波器提取分布、自相关和径向谱
+  统计，共 24 维。后者是 SRM-inspired 固定表示，不是完整 SRM 官方模型。
+- CARF-A full 为唯一主配置，size-only 为诊断；没有新增条件特征或调整
+  SACR。JPEG85/75 评估 QF95-only、same-quality、mixed-codec 三种参考池，
+  每个 quality 独立校准；same-quality 明确属于已知 codec 条件，不是
+  未知 codec zero-shot。
+
+### 20.2 Canonical 检测复核（三种子平均 macro AUROC）
+
+| 数据集 | 表示 | M0 | CARF-A full | CARF-A size-only |
+|---|---|---:|---:|---:|
+| ARForensics | NP-RSR | 0.733 | 0.803 | 0.823 |
+| ARForensics | 固定高通 | 0.592 | 0.650 | 0.670 |
+| DARG T2I | NP-RSR | 0.733 | 0.799 | 0.812 |
+| DARG T2I | 固定高通 | 0.561 | 0.595 | 0.615 |
+
+full−M0 的逐图 paired bootstrap 与生成器覆盖：
+
+| 数据集/表示 | ΔAUROC（seed 0/1/2） | CI 下界 | 不退化 | 严格复核 |
+|---|---|---|---|---|
+| ARF / NP | +0.074 / +0.065 / +0.072 | 均>0 | 6/7、6/7、6/7 | 通过 |
+| ARF / HP | +0.064 / +0.053 / +0.059 | 均>0 | 7/7、6/7、7/7 | 通过 |
+| DARG / NP | +0.077 / +0.051 / +0.069 | 均>0 | 5/5、5/5、5/5 | FPR 范围未全通过 |
+| DARG / HP | +0.034 / +0.041 / +0.028 | 均>0 | 3/5、3/5、3/5 | 未通过 |
+
+DARG/NP 的 full FPR 为 4.18%/3.14%/1.05%，后两个 seed 低于预设 3%
+（偏保守而非误报过高）；DARG/HP 的 seed0 FPR=8.71%，且绝对 AUROC 接近
+随机。因此 DARG/NP 的判别增益稳定存在，但不能把严格协议标记写成通过；
+DARG/HP 不具备稳定检测效用。
+
+### 20.3 Nuisance–signal coupling：跨数据成立，跨特征不成立
+
+| 数据集/表示 | nuisance 最低稳定性（3 seeds） | codec MMD 平均下降 | 平均信号保留 η |
+|---|---|---|---:|
+| ARF / NP | 0.981–0.999 | QF85 86.8%–89.6%；QF75 87.1%–88.5% | 0.100–0.115 |
+| DARG / NP | 0.997–0.999 | QF85 89.4%–91.0%；QF75 90.0%–91.9% | 0.063–0.078 |
+| ARF / HP | **0.193–0.516** | 多数设置下降失败或 MMD 增大 | 0.005 |
+| DARG / HP | **0.024–0.415** | 高度不稳定，部分设置 MMD 增大 | 0.004–0.006 |
+
+NP-RSR 上，DARG 五生成器 η 为 0.013–0.135，ARF 七生成器 η 为
+0.047–0.239：真实 codec 响应稳定且可消除漂移，但 fake–real 均值差也主要
+位于相同方向，跨真实来源和生成器集合复现了 coupling。
+
+固定高通表示没有复现关键前提：U 的跨 source 稳定性低，mean correction
+不能稳定降低真实漂移。虽然其 η 很低，但在 U 不稳定时不能把它解释为同一
+个可迁移 nuisance 子空间。**因此 coupling 是 NP-RSR 表示相关现象，当前
+不能声称是跨取证特征的普遍规律。**
+
+### 20.4 参考池分解（CARF-A full，三种子 macro AUROC）
+
+| 数据集/表示 | QF85：QF95-only / same / mixed | QF75：QF95-only / same / mixed |
+|---|---|---|
+| ARF / NP | 0.496 / 0.732 / 0.728 | 0.443 / 0.672 / 0.710 |
+| ARF / HP | 0.535 / 0.545 / 0.523 | 0.552 / 0.540 / 0.560 |
+| DARG / NP | 0.639 / 0.751 / 0.757 | 0.575 / 0.704 / 0.708 |
+| DARG / HP | 0.602 / 0.583 / 0.568 | 0.593 / 0.544 / 0.574 |
+
+NP-RSR 的 same/mixed reference 明显优于 QF95-only，说明参考 codec 分布是
+核心协议变量；但 mixed 并非总是一致优于 same，且 HP 不呈现同样规律。
+这些结果支持“参考分布匹配影响评分”，不支持“已知质量条件即可解决未知
+codec 泛化”。
+
+### 20.5 外部条件变量捷径与最终判断
+
+DARG within-source 标签审计：full 条件 AUC=**0.995**，size-only=
+**0.977**，pixel complexity=**0.814**。即使 RAISE 与 fake 都统一重编码，
+原始文件大小和分辨率仍携带强标签信息。故 DARG/NP 的 +0.05~0.08 条件增益
+不能全部归因于 nuisance 条件化，也不能作为 CARF-A 机制已解决因果混淆的
+证据。
+
+综合判断：
+
+1. **得到支持的科学结论**：NP-RSR 的 nuisance–signal coupling 可跨
+   ARForensics 与 DARG 复现；条件参考池和逐 codec 校准显著影响结果。
+2. **未得到支持的推广**：coupling 未在独立固定高通表示上复现；CARF-A
+   在外部 HP 上只有 3/5 生成器改善且绝对性能弱，条件变量还存在严重标签
+   关联。
+3. **CARF-A 定位不变**：可作为 real-only 条件参考基线，不能作为创新已
+   充分、机制已普适验证的新检测算法。
+4. **论文路线**：理论命题与正负证据适合“系统性评测与失效机制研究”；
+   目前仍不足以支撑 ICML 方法论文。不新增 SACR-v2 或继续堆叠特征。
+5. **验证**：41 项测试通过；从逐图 NPZ 独立重算 1080 组 canonical 与
+   参考池 AUROC，全部与 JSON 一致。
