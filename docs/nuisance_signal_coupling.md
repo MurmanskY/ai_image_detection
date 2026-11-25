@@ -129,3 +129,31 @@ v13 中 mixed-codec 的 ESS 约为 same-quality 的 3 倍，但 NP-RSR 的 proxy
 - ARF 在 256×256/JPEG95 下 M0/CARF-size 仅约 0.55，size 增益的 CI 跨零，原生分辨率下的增益不能迁移到该受控协议。
 - DARG 在文件大小单独匹配后仍有约 +0.02 的 CARF-size 增益，说明该小规模受控结果不是完全由一维文件大小失衡造成；但其绝对 AUROC 仍约 0.54–0.55，且像素复杂度标签 AUC 在部分生成器上超过 0.8，不能进一步宣称已排除内容分布捷径。
 - 全条件匹配后 ARF 部分生成器的组合条件 AUC 仍约 0.87，故“完全排除文件大小与内容分布捷径”的假设未获支持。
+
+## 11. S3R：source-aware 估计的端点与失败边界（v14）
+
+### 11.1 Source-level ESS 不变量
+
+设 source `i` 有视图权重 `w_iq`。source-weighted mixed 先在 source 内得到 `u_iq=w_iq/Σ_q w_iq` 与条件摘要，再以跨视图平均权重 `v_i ∝ (1/Q)Σ_q w_iq` 聚合 source。source-level ESS 为
+
+`ESS_source = (Σ_i v_i)² / Σ_i v_i²`。
+
+若将完整视图集复制 K 次，source 内摘要和跨视图平均权重不变，因此 `ESS_source` 不变；naive view-level ESS 在等权时可增至 K 倍。这就是实现和单元测试强制保持的防膨胀性质，但它不保证条件均值偏差更小。
+
+### 11.2 Hierarchical shrinkage 的精确误差式
+
+设 same 与 source-mixed 的条件均值为 `μ0,μ1`，经验 oracle 为 `μ*`，令 `μ_γ=(1-γ)μ0+γμ1`。则
+
+`||μ_γ-μ*||² = ||e0+γ(e1-e0)||²`，其中 `e0=μ0-μ*、e1=μ1-μ*`。
+
+若 oracle 已知，未约束最优权重为
+
+`γ* = -<e0,e1-e0> / ||e1-e0||²`，再截断到 `[0,1]`。
+
+实际 oracle 未知，S3R 仅用真实 held-out source 的 Gaussian NLL 选择离散 γ。该选择不保证测试 MSE，更不保证 AUROC 提升。γ=0 必须严格退化为 same-quality，γ=1 必须严格退化为 source-weighted mixed，包括各自独立的 reference-only 标准化、带宽、均值、协方差与 ESS。
+
+### 11.3 P0 结果
+
+所有 12 个 dataset×seed×quality 实验组均选择 **γ=0**。因此 S3R 在最终逐图输出上严格等于 same-quality；真实 validation 一致拒绝引入 mixed-codec。其相对 mixed 的 proxy-MSE 显著下降只是继承 same-quality 的性质，不是新方法增益。
+
+GO=false：QF85 的相对较强基线 ΔAUROC=0；ARF/QF75 因 mixed 更强而退化；FPR 也有部分组超出预设区间。按预注册标准停止 S3R，不开展全量或新增模块。实现初期曾让 hierarchical 两个分量共享 mixed 带宽，导致 γ=0 不完全等于 same；该版本已隔离为 `invalid_pre_bandwidth_fix`，最终结果来自修复独立带宽后的正式重跑。

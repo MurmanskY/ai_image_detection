@@ -890,3 +890,87 @@ AUROC 提升为唯一目标的新检测器。首次运行仅在缓存加载时�
 笔误，修复后断点续跑，不影响数值协议。验证：46 项测试通过；独立重算
 108 组受控全图及 216 组单独匹配 AUROC，全部与逐图分数一致；16 组
 bias–variance 分解误差均小于 1e-5。
+
+## 22. S3R P0（v14）：**GO=false，same-quality 被一致选择，停止扩展**
+
+正式指南：`deep-research-report-v14.md`（用户附带的 v4 文件实际为旧 DCA
+指南，未作为 S3R 依据）。脚本：`analysis/s3r_p0.py`；结果：
+`outputs/s3r/s3r_p0.json`；理论：`docs/nuisance_signal_coupling.md` §11。
+本节为 **s3r-p0-300 source-aware controlled views 示例**，不是全量评估。
+
+### 22.1 协议与四种参考池
+
+所有视图统一 256×256 后 JPEG95/85/75，条件为重编码 log 文件大小。
+ARF 每 seed 使用 3000 fit、500 real validation、500 real calibration；
+DARG 使用 300 fit、100 real validation、300 real calibration；test 300/类。
+γ 只在真实 validation source 上按 Gaussian NLL 从
+{0,0.1,0.2,0.3,0.5,0.75,1} 选择，fake 不参与。
+
+比较：
+
+1. same-quality：目标质量单视图，same-only 标准化与带宽；
+2. naive mixed：混合 QF95/85/75，视图级均值/协方差，source cluster ESS；
+3. source-weighted mixed：source 内摘要 + 跨 source 平均权重，
+   between-source + within-source 总协方差；
+4. hierarchical S3R：same 与 source-mixed 的均值/协方差分层收缩，
+   两个分量分别使用独立 reference-only 标准化与带宽。
+
+主 GO：S3R 相对 mixed 显著降低 proxy-MSE 且不超过 same 的 1.10 倍；
+相对每 seed 较强 same/mixed 的 ΔAUROC>0 且 paired CI 下界>0；至少
+5/7 ARF、4/5 DARG 不退化；FPR∈[3%,7%]、coverage≥95%；未知 codec
+直接 abstain。
+
+### 22.2 真实 validation 一致选择 γ=0
+
+所有 **12 个 dataset×seed×quality 组的 γ 均为 0**。修复后的 S3R 在逐图
+AUROC 上严格等于 same-quality；真实 held-out source 一致拒绝引入
+mixed-codec，因此 hierarchical S3R 没有形成新的估计器。
+
+三种子平均 macro AUROC：
+
+| 数据集/质量 | same | mixed | source-mixed | S3R (γ=0) |
+|---|---:|---:|---:|---:|
+| ARF/QF85 | 0.528 | 0.511 | 0.511 | 0.528 |
+| ARF/QF75 | 0.551 | 0.587 | 0.587 | 0.551 |
+| DARG/QF85 | 0.556 | 0.517 | 0.517 | 0.556 |
+| DARG/QF75 | 0.541 | 0.512 | 0.512 | 0.541 |
+
+source-weighted mixed 与 naive mixed 的检测输出几乎一致，说明仅修正
+ESS 计数和协方差分解并不会自动改善检测排序。受控协议下绝对 AUROC 仍
+接近随机，不能包装为高性能 detector。
+
+### 22.3 MSE 与检测 GO 分解
+
+S3R=γ0 后，其 bias²、variance、MSE 与 same 完全相等。相对 mixed 的
+proxy-MSE 差均显著为负：ARF/QF85 −0.00312、ARF/QF75 −0.00960；
+DARG/QF85 −0.00289、DARG/QF75 −0.00872，source bootstrap CI 均不含 0。
+**这只是继承 same-quality 的性质，不是 S3R 的增量贡献。**
+
+| 数据集/质量 | S3R 相对较强 same/mixed 的 ΔAUROC | 不退化 | 判定 |
+|---|---|---:|---|
+| ARF/QF85 | 0 / 0 / 0，CI=[0,0] | 7/7 | 无正向增益，失败 |
+| ARF/QF75 | −0.038 / −0.035 / −0.037 | 1/7 | 失败 |
+| DARG/QF85 | 0 / 0 / 0，CI=[0,0] | 5/5 | 无正向增益，失败 |
+| DARG/QF75 | 0 / 0 / 0，CI=[0,0] | 5/5 | 无正向增益，失败 |
+
+MSE 标准通过，但检测标准失败。ARF S3R 的 FPR 范围 3.86%–7.29%，两组
+高于 7%；DARG 为 2.36%–5.07%，三组低于 3%，故校准标准也未全部通过。
+coverage 均约 99%–100%，满足 ≥95%；未知 codec 按协议 100% abstain。
+
+**最终 GO=false，按 v14 停止 S3R，不开展全量或新增模块。**
+
+### 22.4 理论意义与复现事件
+
+source-level ESS 的防膨胀不变量成立：复制完整视图集不改变 source 内摘要、
+平均 cluster 权重和 ESS，naive view ESS 则可虚增。分层收缩的误差式允许
+γ=0 成为合法最优解；真实 validation 不保证测试 MSE，更不保证 AUROC。
+
+复现过程中，结果打印键名和 JSON seed 键问题均在汇总阶段修复；另发现
+hierarchical 初版让 same 分量共享 mixed 带宽，导致 γ=0 不严格等于 same。
+该实质问题已修复为两个分量独立带宽，旧结果隔离在
+`outputs/s3r/invalid_pre_bandwidth_fix/`，本节全部来自修正后的正式重跑。
+12 个 checkpoint 可逐组恢复。
+
+验证：53 项测试通过；独立重算最终 288 组逐图 AUROC/coverage，全部与
+JSON 一致；所有 MSE=bias²+variance 分解通过数值校验。S3R 的负结果进一步
+支持将论文定位为参考池统计与失效机制研究，而不是新检测算法。
