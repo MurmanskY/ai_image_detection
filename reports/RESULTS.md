@@ -788,3 +788,105 @@ DARG within-source 标签审计：full 条件 AUC=**0.995**，size-only=
    目前仍不足以支撑 ICML 方法论文。不新增 SACR-v2 或继续堆叠特征。
 5. **验证**：41 项测试通过；从逐图 NPZ 独立重算 1080 组 canonical 与
    参考池 AUROC，全部与 JSON 一致。
+
+## 21. v13 P0：反捷径匹配、参考池统计与表示条件化理论
+
+脚本：`analysis/carf_mechanism_p0.py`、`analysis/dct_forensics.py`；结果：
+`outputs/carf_mechanism/carf_mechanism_p0.json`；理论更新：
+`docs/nuisance_signal_coupling.md` §8–10。实验为
+**v13 matched-analysis + reference-statistics + representation-ci 示例**，
+不是 84k 或新检测方法评测。
+
+### 21.1 受控分辨率/codec 与条件匹配
+
+所有图像统一 resize 256×256 BICUBIC + JPEG95；条件文件大小在本次 JPEG
+编码后的字节流上计算，不再使用原始 PNG/JPEG 元数据。test 为 ARF 7×300/类
+和 DARG 5×300/类。real/fake 以 reference 标准化条件做一对一最优分配，
+caliper=2.5 在运行前冻结；分别做全 8 维、仅文件大小、仅像素复杂度匹配。
+CARF-size/CARF-pixel 均使用既有核加权 Mahalanobis，没有新增评分器。
+
+三种子平均 macro AUROC：
+
+| 数据集 | 匹配协议 | M0 | CARF-size | CARF-pixel |
+|---|---|---:|---:|---:|
+| ARF | 全部受控图 | 0.550 | 0.551 | 0.562 |
+| ARF | 全条件匹配 | 0.563 | 0.556 | 0.569 |
+| ARF | 文件大小单独匹配 | 0.549 | 0.550 | 0.561 |
+| ARF | 像素复杂度单独匹配 | 0.558 | 0.552 | 0.566 |
+| DARG | 全部受控图 | 0.531 | 0.551 | 0.547 |
+| DARG | 全条件匹配 | 0.524 | 0.545 | 0.541 |
+| DARG | 文件大小单独匹配 | 0.531 | 0.550 | 0.547 |
+| DARG | 像素复杂度单独匹配 | 0.525 | 0.546 | 0.542 |
+
+ARF 文件大小单独匹配后的 size−M0 三种子为
++0.0016/+0.0007/−0.0009，CI 均跨零；像素匹配后为
+−0.0047/−0.0056/−0.0075。CARF-pixel 虽保留约 +0.008~0.013 的小幅正增益，
+但绝对 AUROC 仍仅约 0.56。原生分辨率下 NP-RSR 的 M0/CARF-A 结果不能
+迁移到该受控协议，尺度/分辨率与内容分布是重要失效因素。
+
+DARG 文件大小单独匹配后 size−M0 为 +0.019/+0.022/+0.018，CI 下界均>0；
+说明该小规模受控增益不是完全由一维文件大小失衡造成。但其 AUROC 仍约
+0.55，且部分生成器的像素条件标签 AUC 仍高（Switti 约 0.85），不能进一步
+声称已排除内容分布捷径。全条件匹配也未充分平衡：ARF Infinity 的组合
+条件 AUC 仍为 0.874，因此“排除全部可观测捷径”的假设未获支持。
+
+### 21.2 Same-quality 与 mixed-codec：ESS 增加不等于估计更好
+
+对固定真实查询，以全真实参考构造 proxy-oracle，将三种子条件均值误差
+精确分解为 proxy bias² + seed variance。该 oracle 是经验代理，不是真实
+总体均值。NP-RSR 结果：
+
+| 数据/视图 | 参考池 | proxy bias² | seed variance | proxy MSE | ESS 中位 |
+|---|---|---:|---:|---:|---:|
+| ARF/QF85 | same | 0.00027 | 0.00104 | 0.00131 | 2769 |
+| ARF/QF85 | mixed | 0.00502 | 0.00113 | 0.00615 | 8225 |
+| ARF/QF75 | same | 0.00034 | 0.00118 | 0.00152 | 2769 |
+| ARF/QF75 | mixed | 0.02924 | 0.00113 | 0.03037 | 8225 |
+| DARG/QF85 | same | 0.00005 | 0.00073 | 0.00078 | 312 |
+| DARG/QF85 | mixed | 0.00484 | 0.00081 | 0.00564 | 932 |
+| DARG/QF75 | same | 0.00005 | 0.00074 | 0.00078 | 312 |
+| DARG/QF75 | mixed | 0.02924 | 0.00081 | 0.03004 | 932 |
+
+mixed-codec 的 ESS 约增至 3 倍，但条件偏差和 MSE 显著更大，跨 seed
+方差没有下降。多个 codec 视图来自相同 source，ESS 未计入视图相关性，
+不能解释为独立真实来源增加。已知 codec 时，same-quality 的条件偏差优势
+可以大于 mixed pooling 的样本量收益；mixed pooling 不是无成本的方差降低。
+HP 表示也呈现 mixed MSE 更高的趋势。
+
+### 21.3 表示依赖 coupling：先识别，再解释 η
+
+v13 固定判据：最低 per-view mean-response cos≥0.9，且 QF85/QF75 的
+MMD reduction≥0.3，才将低 η 解释为可迁移 nuisance 子空间上的信号重叠；
+否则标记 unidentified。稳定性、MMD 和 η 均补做 source/image bootstrap CI。
+
+| 数据/表示 | nuisance 稳定性 | MMD reduction | 平均 η | 判定 |
+|---|---|---|---:|---|
+| ARF/NP | 0.981–0.999 | QF85 86.8%–89.6%；QF75 87.1%–88.5% | 0.124–0.132 | coupling |
+| DARG/NP | 0.997–0.999 | QF85 89.4%–91.0%；QF75 90.0%–91.9% | 0.063–0.078 | coupling |
+| ARF/DCT | 0.993–0.998 | QF85 6.6%–56.3%且CI跨零；QF75 72.8%–82.4% | 0.014–0.016 | unidentified |
+| DARG/DCT | 0.984–0.996 | QF85 41.2%–63.3%；QF75 70.7%–82.6% | 0.005–0.008 | coupling |
+| ARF/HP | 0.193–0.516 | 不稳定 | 0.001 | unidentified |
+| DARG/HP | 0.024–0.415 | 不稳定 | 0.004–0.005 | unidentified |
+
+DCT/DARG 各生成器 η 的 bootstrap 上界均远低于 0.8；ARF/DCT 虽然 η 同样
+很低，但 QF85 的真实漂移校正未通过可识别性判据，不能据此声称 coupling。
+这说明 coupling 不是简单的“只有 NP-RSR 存在”，而是由**表示、数据分布
+和 codec 条件共同决定**。低 η 在 nuisance 子空间不可识别时没有机制含义。
+
+### 21.4 对 v13 三个核心问题的回答
+
+1. **能否排除文件大小/内容捷径？不能。** 受控协议使 ARF 的原增益基本
+   消失；DARG 的一维文件大小匹配后仍有小增益，但内容分布未平衡且绝对
+   性能接近随机。观察性匹配不能提供因果排除证明。
+2. **same 与 mixed 的统计差异是什么？** mixed 提高名义 ESS，却增大条件
+   偏差与 MSE，且相关视图没有降低跨 seed 方差；same-quality 在已知 codec
+   下具有更明确的统计优势。
+3. **表示依赖性能否成为研究贡献？可以，但必须带可识别性前提。** NP 在
+   两个数据集稳定，DCT 只在 DARG/部分 codec 条件通过，HP 不通过；这一
+   正负证据链比宣称普遍 coupling 更准确，也更具可证伪性。
+
+论文定位仍为条件参考分布、参考池统计与失效机制的系统性研究，而非以
+AUROC 提升为唯一目标的新检测器。首次运行仅在缓存加载时遇到变量名
+笔误，修复后断点续跑，不影响数值协议。验证：46 项测试通过；独立重算
+108 组受控全图及 216 组单独匹配 AUROC，全部与逐图分数一致；16 组
+bias–variance 分解误差均小于 1e-5。

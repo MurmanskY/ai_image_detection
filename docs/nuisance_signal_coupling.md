@@ -86,6 +86,46 @@
 实验结果见 `outputs/carf_protocol/carf_protocol_p1.json`：
 
 - **NP-RSR 跨数据集复现成立。** ARForensics 三种子 nuisance 最低稳定性为 0.981–0.999，DARG T2I 为 0.997–0.999；两者 mean-correction 均消除约 87%–92% 的真实 codec MMD，而七生成器/五生成器的平均正交信号保留率仅约 0.10/0.07。命题 A 所描述的高耦合在两个真实来源与生成器集合上成立。
-- **跨表示复现不成立。** 固定高通表示的最低稳定性仅为 ARF 0.193–0.516、DARG 0.024–0.415，mean-correction 经常增大而非减小 MMD。虽然正交均值差能量很低，但由于 U 本身不稳定，不能据此宣称存在同一个可迁移 nuisance 子空间。当前 coupling 是 **NP-RSR 表示相关现象**，不是跨取证特征的普遍定理。
+- **固定高通表示未复现稳定 nuisance 子空间。** 其最低稳定性仅为 ARF 0.193–0.516、DARG 0.024–0.415，mean-correction 经常增大而非减小 MMD。虽然正交均值差能量很低，但由于 U 本身不稳定，不能据此宣称存在同一个可迁移 nuisance 子空间。这一结果否定的是固定高通表示上的可识别性，而不是所有非 NP 表示都存在或不存在 coupling。
 - **条件增益与机制解释必须分离。** CARF-A full 在 ARF 的 NP/HP 和 DARG 的 NP 上均有三种子正增量，但 DARG 文件大小标签 AUC=0.977、full 条件 AUC=0.995，且 DARG HP 只有 3/5 生成器改善。因此条件 Mahalanobis 的正增量不能单独证明命题 B 中的理想条件模型已经实现，更不能排除标签代理。
 - **理论在论文中的合适作用。** 命题 A/C/D 可解释为什么不变投影、未知组校准和低覆盖评分会失效；命题 B 只提供高斯同协方差下的充分条件。实验不支持“任意残差空间均存在稳定耦合”或“条件评分普遍优于无条件评分”的更强表述。
+
+## 8. 表示条件化的可识别性判据（v13）
+
+将结论显式写成表示与数据分布的函数：对残差映射 `ψ ∈ F`，定义
+
+`U_ψ = InterventionBasis(ψ(r(a))-ψ(r(a0)))`，
+`Δ_ψ = E[ψ(r)|fake]-E[ψ(r)|real]`，
+
+以及 `ρ_ψ = ||P_Uψ Δ_ψ||²/||Δ_ψ||²`。只有当 `U_ψ` 在 source-disjoint 重抽样中稳定，且真实 intervention drift 可被一致校正时，才将 `1-ρ_ψ` 解释为可迁移 nuisance 子空间上的信号保留率。
+
+实验预注册的可操作判据为：最低 per-view mean-response cos≥0.9，且 QF85/QF75 的 MMD reduction≥0.3。判据不满足时标记 **unidentified**，而不是根据很低的 η 反推 coupling。
+
+v13 的结果形成三种情况：
+
+- NP-RSR：ARF 与 DARG 均满足可识别性，且各生成器 η 的 bootstrap 上界低于 0.8，支持 coupling。
+- 固定 DCT：DARG 满足判据，η=0.005–0.008，支持 coupling；ARF 的 QF75 MMD 下降 72.8%–82.4%，但 QF85 仅 6.6%–56.3%且 bootstrap CI 跨零，因此整体仍为 unidentified。
+- 固定高通：两个数据集的 nuisance 稳定性均不满足判据，保持 unidentified。
+
+因此，`ρ_ψ` 不仅依赖表示，还依赖数据分布和 codec 条件；不能从单一表示或单一质量层级推出普遍结论。
+
+## 9. Same-quality 与 mixed-codec 的 bias–variance 分解
+
+对固定真实查询，设第 `t` 个 seed 的条件均值估计为 `μ_hat_t`，全真实参考得到的 proxy-oracle 为 `μ*`。记 `μ_bar=T^(-1)Σ_t μ_hat_t`，则有恒等式
+
+`T^(-1)Σ_t ||μ_hat_t-μ*||²
+ = ||μ_bar-μ*||² + T^(-1)Σ_t ||μ_hat_t-μ_bar||²`。
+
+左侧是 proxy MSE，右侧分别是跨 seed 偏差平方和方差。`μ*` 是有限真实参考的经验代理，不是真实条件均值，因此该分解是诊断量而非总体偏差的无偏估计。
+
+v13 中 mixed-codec 的 ESS 约为 same-quality 的 3 倍，但 NP-RSR 的 proxy MSE 明显更高。例如 ARF/QF75：same 的 bias²/variance/MSE 为 0.00034/0.00118/0.00152，mixed 为 0.02924/0.00113/0.03037。DARG/QF75 同样由 0.00078 增至 0.03004。mixed 的多视图来自相同 source，ESS 没有计入视图间相关性，因此更大的 ESS 不等于更多独立真实来源，也没有带来跨 seed 方差下降。
+
+这支持一个有限结论：已知 codec 时，same-quality 的条件偏差优势可以大于 mixed-codec 的样本量收益；不能把 mixed pooling 当作无成本的方差降低。
+
+## 10. 可观测捷径匹配的证据边界
+
+统一分辨率与 codec 后，再做 real/fake 条件匹配，只能检验当前可观测文件大小和复杂度代理是否解释增益。匹配后标签 AUC 仍高时，说明重叠支持不足；匹配后 AUROC 变化也可能包含样本选择效应。因此该分析不能证明因果排除，只能给出以下可证伪结论：
+
+- ARF 在 256×256/JPEG95 下 M0/CARF-size 仅约 0.55，size 增益的 CI 跨零，原生分辨率下的增益不能迁移到该受控协议。
+- DARG 在文件大小单独匹配后仍有约 +0.02 的 CARF-size 增益，说明该小规模受控结果不是完全由一维文件大小失衡造成；但其绝对 AUROC 仍约 0.54–0.55，且像素复杂度标签 AUC 在部分生成器上超过 0.8，不能进一步宣称已排除内容分布捷径。
+- 全条件匹配后 ARF 部分生成器的组合条件 AUC 仍约 0.87，故“完全排除文件大小与内容分布捷径”的假设未获支持。
