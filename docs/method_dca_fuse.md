@@ -402,3 +402,21 @@ ridge 探针在 LOGO 全部 4 折、orig 与 jpeg95 两种 codec 下
 
 联合结论：PRADA 机制证据对冻结视觉表征的不可解码性在标量（MPID）与
 空间图（STEM-AR）两种粒度上均成立，机制蒸馏路线整体终止。
+
+## CARF（v9 指南主线，P0）：首个 GO=true
+
+按 `deep-research-report-v9.pdf` 的主线 CARF（内容与采集条件条件化的
+取证残差建模）完成 P0：`analysis/carf_p0.py`。语义仅用于检索内容相近的
+真实参考；判别证据为局部取证残差对条件化真实分布 p(r|c,a) 的偏离
+（核加权局部高斯）；cal real conformal 校准。
+
+结果（`outputs/carf/carf_p0.json`，协议 A 全 JPEG95 codec-matched）：
+M3 联合条件 macro **0.802** vs M0 无条件 0.732（bootstrap CI95
+[+0.042,+0.094]），vs RACE NP-RSR 0.507；real FPR 5.7%（名义 5%±2pp
+内）；7/7 生成器不退化——**预注册 GO 全部通过，是 v5 以来首个通过的
+新机制路线**。
+
+关键发现：增益几乎全来自**采集条件化**（M2≈M3，M1≈M0）；绝对性能仍
+低于 UnivFD（0.908 同 subsample）；orig 混合格式协议下 RACE NP-RSR
+反超（0.858 vs 0.652），CARF 优势限定于 codec-matched 协议。
+详见 `reports/RESULTS.md` §16。P1（更大规模 + 消融 + 多种子）进行中。
