@@ -420,3 +420,15 @@ M3 联合条件 macro **0.802** vs M0 无条件 0.732（bootstrap CI95
 低于 UnivFD（0.908 同 subsample）；orig 混合格式协议下 RACE NP-RSR
 反超（0.858 vs 0.652），CARF 优势限定于 codec-matched 协议。
 详见 `reports/RESULTS.md` §16。P1（更大规模 + 消融 + 多种子）进行中。
+
+## CoNTra（v10 主线，P0）：负结果——nuisance 与信号同向
+
+按 `deep-research-report-v10.pdf` 第二部分的 CoNTra（反事实 nuisance
+transport）完成 P0：`analysis/contra_p0.py`。配对反事实差分高度可识别
+（近似秩一，跨 source cos≈0.99，mean-correction 消除 88% 跨 codec 漂移），
+但**生成异常信号与采集 nuisance 同向**：投影校正后 fake−real 差异仅剩
+2.5%–28%（η≪0.8），GO=false，按 v10 停止。
+
+这是本项目最重要的理论性发现之一：在 Noiseprint++ 残差空间中，压缩
+敏感性方向同时是采集漂移方向与真假判别方向，"先去除采集效应再检测"
+不成立。详见 `reports/RESULTS.md` §18。
