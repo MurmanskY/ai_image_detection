@@ -974,3 +974,108 @@ hierarchical 初版让 same 分量共享 mixed 带宽，导致 γ=0 不严格等
 验证：53 项测试通过；独立重算最终 288 组逐图 AUROC/coverage，全部与
 JSON 一致；所有 MSE=bias²+variance 分解通过数值校验。S3R 的负结果进一步
 支持将论文定位为参考池统计与失效机制研究，而不是新检测算法。
+
+## 23. v15：Source-ESS、条件校准与估计—判别关系统计分析
+
+脚本：`analysis/reference_pool_analysis.py`；测试：
+`tests/test_reference_pool_analysis.py`；结果：
+`outputs/reference_analysis/v15_analysis.json` 与 `calibration_*.npz`；理论：
+`docs/nuisance_signal_coupling.md` §12。全程复用 S3R checkpoint 和逐图分数，
+未开发新检测器或调整阈值。
+
+### 23.1 S3R 失败原因与保留的方法
+
+S3R GO=false 的直接原因是：12 组实验全部 γ=0，严格退化为 same-quality；
+没有超过较强基线的 ΔAUROC，且部分 FPR 超出预设区间。MSE 优于 mixed 只是
+继承 same-quality 的性质，不能计作 S3R 增益。
+
+当前保留 **Same-quality Conditional Real-reference Residual Scoring**
+（same-quality CARF-A）作为实验基线，而非新算法：统一受控视图，按已知
+codec/quality 选择真实参考，以 source 为独立单位估计条件残差均值/协方差，
+Mahalanobis 评分，再用独立 real calibration 做组内 conformal；未知条件
+abstain。其适用范围仅限已知质量、存在同质量真实参考且 source-disjoint
+的协议，不是未知 codec zero-shot。
+
+与相关方法的区别：UnivFD 84k AUROC 0.9127 但使用真假监督；CARF-A 原生
+协议有正条件增益但受分辨率/内容代理影响；same-quality 的 proxy-MSE 优于
+mixed 但受控 AUROC 仅约 0.51–0.59；S3R/source-mixed 未带来额外检测收益。
+不同训练信息与协议不能仅按 AUROC 排名。
+
+### 23.2 Source-ESS 模拟与真实权重不变量
+
+模拟使用 `r_iq=√ρ·b_i+√(1−ρ)·e_iq`，使 ρ 精确等于视图相关系数；
+128 组配置覆盖 source 数、视图数、相关性和均匀/倾斜权重，每组 500 次
+Monte Carlo。
+
+| 100 sources、等权 | Q=1 | Q=2 | Q=4 | Q=8 |
+|---|---:|---:|---:|---:|
+| ρ=0：MSE | 0.01125 | 0.00525 | 0.00248 | 0.00123 |
+| ρ=1：MSE | 0.01040 | 0.00934 | 0.01048 | 0.01011 |
+| 任意 ρ：naive view-ESS | 100 | 200 | 400 | 800 |
+| 任意 ρ：source-ESS | 100 | 100 | 100 | 100 |
+
+独立视图可降低估计方差，完全相关视图不能；view-ESS 却在两种情况下都
+线性增长。source-ESS 是有意的 source 独立量，在独立视图存在时较保守，
+不能独自表示所有视图信息。
+
+真实参考权重复制完整视图集（ARF/DARG 各 100 查询）：view-ESS 均约翻倍，
+source-ESS 比值约 1；均值最大变化 1.43e-6、协方差最大变化 2.98e-6、
+source-ESS 最大变化 4.89e-4（浮点量级）。不变量在真实权重下成立。
+
+### 23.3 条件校准：阈值离散性、FPR CI 与 risk–coverage
+
+对 same-quality 的每个已知质量组保存 real calibration 分数、阈值、有效
+样本数、有限样本秩和相邻阈值间隔，并对测试 real FPR 做 source bootstrap。
+
+- ARF 各组 macro FPR 的 95% CI 整体约为 **3.05%–8.39%**，部分上界超过
+  7%；点估计有两组超过 7%。
+- DARG 各组 macro FPR 的 95% CI 整体约为 **1.62%–6.22%**，部分点估计
+  低于 3%。
+- ARF 的 calibration 每组 500 个支持样本，DARG 每组约 297–298 个；阈值
+  秩和间隔已逐组保存，不能只报告一个阈值数字。
+- ESS 阈值从 20 提升至 200 时，DARG coverage 从约 99% 降至约 **75%**。
+  部分 FPR 下降，但不满足 coverage≥95%，构成明确的 risk–coverage 代价。
+- 未知 codec 继续 100% abstain，不能算作 zero-shot 检测。
+
+12 个 calibration 文件中的阈值、逐生成器 FPR 与 macro FPR 均已从逐图
+分数独立重算一致。校准通过与否、coverage 和 AUROC 必须分别报告。
+
+### 23.4 MSE、ESS 与 AUROC 的非单调关系
+
+使用 same、naive mixed、source-mixed 的逐 seed 数据，排除重复的
+S3R=γ0 点，共 36 个 dataset×seed×quality×method 点：
+
+| 相关性 | Spearman |
+|---|---:|
+| 全局 MSE vs macro AUROC | −0.070 |
+| 全局 source-ESS vs macro AUROC | −0.047 |
+| 全局 source-ESS vs MSE | +0.300 |
+| ARF/QF75 MSE vs AUROC | +0.510 |
+| ARF/QF85 MSE vs AUROC | −0.824 |
+| DARG/QF85 MSE vs AUROC | −0.933 |
+| DARG/QF75 MSE vs AUROC | −0.966 |
+
+全局 Pearson MSE–AUROC 为 +0.221。相关点有限且非独立随机样本，以上仅作
+描述性证据，不作普遍独立性的统计检验。可支持的结论是：**较低条件均值
+误差、更大 ESS、更高 AUROC 和合格 FPR 是不同目标，没有简单单调等价关系。**
+
+### 23.5 已完成工作、下一步与 ICML 定位
+
+已完成：统一 baseline 矩阵、AR 专用方法复现、数据/格式/重复审计、
+CARF-A 协议修复、CoNTra/SACR/S3R 预注册负结果、ARF/DARG 外部小规模复核、
+NP/DCT/HP 表示依赖 coupling、same/mixed bias–variance、source-ESS 模拟与
+真实不变量、条件校准 CI 和 risk–coverage、逐图预测与 checkpoint。
+
+下一步不再开发 S3R-v2、SACR-v2 或 CoNTra 新模块。优先工作是：扩大真实
+来源与生成家族、同协议比较 Forensic Self-Descriptions、完善 source-aware
+均值/协方差误差界、研究支持不足时的风险—覆盖保证，并将未知条件作为独立
+风险问题，而非强行检测。
+
+**ICML 判断：S3R 和 CARF-A 均不足以单独作为强方法论文。** 当前最合适的
+定位是 *Reference-Pool Statistics and Failure Mechanisms for Real-Only
+AI-Generated Image Detection*：以来源相关性、codec 条件、参考池偏差—方差、
+表示依赖和条件校准失效为贡献。若无法补足更强理论保证和独立外部验证，
+应考虑下一轮 ICML 或 CVPR/ICCV/TIFS，而不是继续堆叠检测模块。
+
+验证：56 项测试通过；12 组 calibration 阈值与 FPR 独立复核一致；
+模拟相关系数公式已修正为精确 ρ 后重跑全部统计分析。

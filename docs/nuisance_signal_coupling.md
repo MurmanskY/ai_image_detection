@@ -157,3 +157,35 @@ v13 中 mixed-codec 的 ESS 约为 same-quality 的 3 倍，但 NP-RSR 的 proxy
 所有 12 个 dataset×seed×quality 实验组均选择 **γ=0**。因此 S3R 在最终逐图输出上严格等于 same-quality；真实 validation 一致拒绝引入 mixed-codec。其相对 mixed 的 proxy-MSE 显著下降只是继承 same-quality 的性质，不是新方法增益。
 
 GO=false：QF85 的相对较强基线 ΔAUROC=0；ARF/QF75 因 mixed 更强而退化；FPR 也有部分组超出预设区间。按预注册标准停止 S3R，不开展全量或新增模块。实现初期曾让 hierarchical 两个分量共享 mixed 带宽，导致 γ=0 不完全等于 same；该版本已隔离为 `invalid_pre_bandwidth_fix`，最终结果来自修复独立带宽后的正式重跑。
+
+## 12. Source-ESS、校准区间与检测误差的非单调性（v15）
+
+### 12.1 Source-ESS 的统计含义与边界
+
+source-level ESS 度量的是**独立真实来源的有效数量**，不是独立视图数量。对同一 source 复制完整视图集，source-weighted mean、covariance 和 ESS 应保持不变；naive view-level ESS 则可增加。真实参考权重实验中，ARF/DARG 各 100 个查询的 view-ESS 均约变为 2 倍，而 source-ESS 比值约为 1，均值最大变化约 1.4e-6、协方差最大变化约 3.0e-6。
+
+模拟采用 `r_iq=√ρ·b_i+√(1−ρ)·e_iq`，其中 `b_i` 为 source 共享效应、`e_iq` 为独立视图噪声，因此 ρ 就是视图相关系数。100 sources、等权时：
+
+- ρ=0：Q 从 1 增至 8，MSE 从约 0.01125 降至 0.00123，接近独立测量的 1/Q 方差缩减；view-ESS 从 100 增至 800。
+- ρ=1：MSE 约 0.01 且不随 Q 下降，但 view-ESS 同样从 100 增至 800；source-ESS 保持 100。
+
+因此 source-ESS 在完全相关视图上防止虚假样本量膨胀，但在真正独立视图存在时是有意的保守量，不能独自代表全部视图信息。ESS 是支持度诊断，不是检测性能代理。
+
+### 12.2 条件校准的不确定性
+
+对每组 calibration，除 conformal 阈值外，应报告有效样本数、有限样本秩和相邻阈值间隔；对测试 real FPR 做 source bootstrap，而不是只给点估计。v15 中：
+
+- ARF macro FPR 的 95% CI 在各组约为 3.05%–8.39%，部分高端超过 7%。
+- DARG macro FPR 的 95% CI 约为 1.62%–6.22%，部分低端低于 3%。
+- ESS≥200 时 DARG coverage 降至约 75%，虽然部分 FPR 降低，但不满足 coverage≥95%。这构成明确的 risk–coverage 代价，不能通过提高 ESS 门槛只展示较低 FPR。
+- 未知 codec 仍 100% abstain，不属于 zero-shot 检测。
+
+### 12.3 估计质量与判别质量不存在简单单调关系
+
+对 same、naive mixed、source-mixed 的逐 seed 结果（排除重复的 S3R=γ0 点），36 个 dataset×seed×quality×method 点上：
+
+- MSE 与 macro AUROC 的全局 Spearman 相关为 −0.070，Pearson 为 0.221。
+- source-ESS 与 AUROC 的全局 Spearman 相关为 −0.047，与 MSE 为 0.300。
+- 分组方向并不一致：ARF/QF75 的 MSE–AUROC Spearman 为 +0.510，其他三组为 −0.824、−0.933、−0.966。
+
+这些点数量有限且并非独立随机样本，因此相关值只作描述性证据，不作普遍独立性的统计检验。更准确的结论是：较低条件均值误差、较大 ESS、较高 AUROC 和合格 FPR 是不同目标，不能相互替代。
