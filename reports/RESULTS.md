@@ -1079,3 +1079,261 @@ AI-Generated Image Detection*：以来源相关性、codec 条件、参考池偏
 
 验证：56 项测试通过；12 组 calibration 阈值与 FPR 独立复核一致；
 模拟相关系数公式已修正为精确 ρ 后重跑全部统计分析。
+
+## 24. SCALE / QSCALE / DART：token 序列分布建模的三次预注册检验
+
+方法文档：`docs/method_scale_dart.md`。代码：`analysis/scale_p0.py`、
+`analysis/qscale_p0.py`、`analysis/dart_p0.py`。数据均来自既有 DARG T2I
+逐 token 条件/无条件似然缓存，不重新运行生成模型；三 seed、每生成器
+300 fake，真实参考/校准/测试独立划分。
+
+### 24.1 SCALE：逐位置经验尾概率
+
+SCALE 用真实参考估计每个 token 位置的双侧经验尾概率，scale 内 Fisher 或
+Higher Criticism 聚合，再做 model-bank max 的序列级真实校准。优点是 real-only
+且无需 token 独立假设；缺点是丢失偏差方向和幅度。
+
+| 方法 | macro AUROC（3 seeds） | GO |
+|---|---|---|
+| SCALE-Fisher | 0.729 / 0.717 / 0.740 | false |
+| SCALE-HC | 0.413 / 0.396 / 0.397 | false |
+| 官方 PRADA | 0.9997 / 0.9993 / 0.9996 | 强基线 |
+
+### 24.2 QSCALE：signed quantile-function 空间
+
+QSCALE 保留每个 scale 的 16 个 signed quantiles，以近似 1-Wasserstein 的
+quantile-function 几何替代逐位置尾概率，使用真实参考 Mahalanobis/kNN。
+
+- Mahalanobis：0.731 / 0.715 / 0.723；
+- kNN：0.784 / 0.767 / 0.777；
+- 仍显著低于 PRADA，GO=false。
+
+这说明 signed 分布表示本身不能替代监督式 token 证据。
+
+### 24.3 DART：变量 scale 的 Deep Sets + LOGO
+
+DART 使用 quantile、scale length/index 和 attention pooling，严格
+leave-one-generator-out；held-out fake 不参与训练或提前停止。
+
+| held-out | DART AUROC（3 seeds） | PRADA | QSCALE-kNN |
+|---|---|---|---|
+| Infinity | 0.922–0.930 | 约1.000 | 0.772–0.788 |
+| Janus | 0.657–0.791 | 约0.999 | 0.909–0.941 |
+| LlamaGen | 0.179–0.293 | 约0.999 | 0.701–0.714 |
+| Switti | 0.743–0.837 | 约1.000 | 0.685–0.701 |
+
+macro 仅 0.629–0.706。LlamaGen 严重方向反转，说明共享分类器不能消除模型
+特异 likelihood direction，LOGO GO=false。SCALE/QSCALE/DART 当前均不构成
+ICML 方法贡献；后续仅保留模型特异 DART 的 C2I 小规模检验，若无稳定增益
+则停止 token-distribution 路线。项目验证：64 tests passed。
+
+## 25. 完整循环一致性 DART：C2I 多家族显著增益（小规模，GO 仍=false）
+
+实现：`analysis/dart_p0.py`、`analysis/dart_c2i_p0.py`；方法文档：
+`docs/method_scale_dart.md`；结果：`dart_c2i_cycle_consistent.json`、
+`dart_c2i_external.json`、`dart_c2i_external_fullbank.json` 及
+`significance*.json`。全部为 **dart-c2i-250 示例协议**，不是全量结果。
+
+### 25.1 机制与逐步证据
+
+完整 DART 将 AR 图像是否位于 tokenizer–decoder–likelihood 的不动点附近，
+表示为变量 scale 的联合分布：signed likelihood-difference quantile、
+scale 平均 quantization error、decoder reconstruction error 和 scale
+length/index，再由 Deep Sets attention 学习尺度贡献。它不是简单增加通用
+视觉特征，也不是 real-only 检测：每个参考模型使用真实与对应家族 fake
+进行模型特异训练，真实 calibration 仅用于分数标准化与阈值校准。
+
+逐步消融（VAR_d16 / LlamaGen-B256，3 seeds）：
+
+| 版本 | VAR_d16 | LlamaGen-B256 | macro AUROC |
+|---|---:|---:|---:|
+| likelihood-only | 0.525–0.554 | 0.969–0.998 | 0.747–0.776 |
+| + quantization | 0.587–0.642 | 0.994–0.999 | 0.791–0.819 |
+| 完整循环一致性 | **0.811–0.876** | **0.994–0.999** | **0.905–0.938** |
+| 官方 PRADA | 0.477–0.509 | 0.993–0.997 | 0.737–0.752 |
+
+说明 likelihood quantile 对 LlamaGen 已足够，而 decoder cycle evidence 是
+覆盖 VAR 等其他 AR 家族的关键，不是单纯增加分类器容量。
+
+### 25.2 外部 RAR/HMAR 与参考家族覆盖
+
+初始四模型 bank（VAR_d20/d30、LlamaGen-B/L256）中没有任何 RAR 模型，
+RAR-B 仅 0.532–0.574。加入同家族 RAR-L 后，RAR-B 达 **0.880–0.922**。
+这证明 model-aware 方法需要参考家族覆盖，缺失参考时不能据此否定机制。
+
+完整五模型 bank 的结果（每生成器 250 张，三 seed）：
+
+| 生成器 | DART AUROC | 同 bank PRADA | paired ΔAUROC（95%CI） |
+|---|---|---|---|
+| VAR_d16 | 0.770–0.863 | 0.478–0.509 | +0.293/+0.354/+0.292，均为正 |
+| LlamaGen-B256 | 0.994–0.999 | 0.993–0.997 | 不显著 |
+| RAR-B | **0.880–0.922** | 0.520–0.594 | +0.373/+0.286/+0.378，均为正 |
+| HMAR-D16 | 0.755–0.848 | 0.484–0.542 | +0.331/+0.307/+0.271，均为正 |
+| **macro** | **0.855–0.898** | 0.619–0.660 | seed0 +0.259 [+0.221,+0.296] |
+
+LlamaGen 已饱和，主要增益来自 VAR、RAR 和 HMAR。当前基线是**同五模型
+bank 的 PRADA**，不是官方完整八模型 bank，报告时不扩大比较口径。
+
+### 25.3 GO、校准和未解决问题
+
+预注册 GO 仍为 false：FPR 分别为 3%/4%/2%，最后一个 seed 低于 3% 下界。
+这是偏保守的校准结果，不能事后修改阈值或 GO。部分生成器在 TPR@1%FPR
+仍接近零，说明高 AUROC 不等于低 FPR 工作点实用。
+
+目前尚缺：更大 calibration source 的 FPR 稳定性、跨 codec、更多真实来源、
+官方完整 bank 对照、不同数据规模和更低 FPR 工作点验证。完整 DART 是
+当前唯一具有显著多家族增益的候选方法，但尚不能称为成熟 ICML 方法或
+未知生成器 zero-shot detector。后续只针对这些证据缺口验证，不再增加新
+特征或网络模块。项目测试：64 passed。
+
+
+## 26. DART 1000-real P1：AUROC 增益稳定，校准显著改善（9 seeds）
+
+实现仍为 `analysis/dart_c2i_p0.py`；结果：`dart_c2i_real1000.json`、
+`dart_c2i_real1000_s3_8.json`、`significance_real1000.json`。全部属于
+**dart-c2i-real1000-fake250 示例协议**，不是全量实验。
+
+### 26.1 评估协议修正与旧结果复核
+
+本轮修复了会影响大规模真实集评估的工程问题：
+
+- real 与 fake 的缓存样本数分别按 1000/250 检查，`pack()` 对 DART 和
+  PRADA 使用相同的样本截断，避免旧 1000 行似然与 250 行循环特征错位；
+- fake 训练/验证/测试固定为互斥的 100/50/100，消除旧代码验证 fake 可能与
+  训练 fake 重叠的模型选择问题；
+- 逐图分数文件增加配置名和 `n_real`，避免不同实验互相覆盖；
+- RAR 分片只用于 batch=1 的相同计算。并发分片出现少量不一致后未采用，
+  改用独占重算；最终 conditional/unconditional 前 250 行与旧缓存逐值一致。
+
+使用互斥 fake 划分重跑原 250-real 完整五模型 P0，macro AUROC 为
+0.893/0.898/0.856，FPR 仍为 3%/4%/2%，与旧结果几乎一致。因此旧的多家族
+AUROC 结论不是由验证集重叠驱动，但旧 GO=false 不变。结果见
+`dart_c2i_external_fullbank_corrected.json`。
+
+### 26.2 P1 设置与前三 seed GO
+
+真实集按 400 reference / 300 calibration / 300 test 独立划分，fake 每类
+250；模型、特征、网络和 conformal 规则均不变。前三个 seed：
+
+| seed | DART macro AUROC | 同 bank PRADA | ΔAUROC | DART FPR |
+|---|---:|---:|---:|---:|
+| 0 | 0.902 | 0.655 | +0.247 | 5.33% |
+| 1 | 0.913 | 0.668 | +0.245 | 4.67% |
+| 2 | 0.904 | 0.643 | +0.261 | 7.00% |
+
+macro、增益、4/4 生成器不退化和 FPR 四项预注册标准均通过，故前三 seed
+**GO=true**。四模型诊断在缺少 RAR-L 时 macro 仅 0.809–0.820，但 FPR 三个
+seed 均为 4.67%，再次说明参考家族覆盖和校准稳定性是两个独立问题。
+
+### 26.3 全部 9 seeds 与统计核验
+
+| 生成器 | DART AUROC 均值 | 9-seed 范围 | TPR@1%FPR 范围 |
+|---|---:|---:|---:|
+| VAR_d16 | 0.845 | 0.780–0.891 | 0–0.01 |
+| LlamaGen-B256 | 0.998 | 0.992–1.000 | 0.89–1.00 |
+| RAR-B | 0.942 | 0.905–0.957 | 0.06–0.58 |
+| HMAR-D16 | 0.824 | 0.767–0.851 | 0–0.01 |
+
+- DART macro AUROC：**0.902 ± 0.015**；最小 seed 为 0.873；
+- 同 bank PRADA macro：0.621–0.668；DART 最小 macro 增益为 +0.245；
+- FPR 依次为 5.33%、4.67%、7.00%、6.00%、6.00%、3.67%、5.00%、3.00%、
+  7.33%，相较旧协议的 0–13% 明显改善；
+- seed 8 的 FPR=22/300=7.33%，略超 7% 上限，因此全部 9 seeds 的严格
+  **GO=false**。不能事后放宽阈值或只汇报前三 seed。
+
+对保存的逐图分数独立重算 72 个 AUROC，最大误差为 0。seed 0 的 5000 次
+paired bootstrap：
+
+| 生成器 | paired ΔAUROC | 95%CI |
+|---|---:|---:|
+| VAR_d16 | +0.315 | [+0.248,+0.383] |
+| LlamaGen-B256 | +0.003 | [-0.002,+0.010] |
+| RAR-B | +0.369 | [+0.312,+0.428] |
+| HMAR-D16 | +0.300 | [+0.236,+0.366] |
+| **macro** | **+0.247** | **[+0.220,+0.275]** |
+
+### 26.4 结论与下一步
+
+扩大真实参考与校准集同时提高了 macro AUROC 和 FPR 稳定性，支持 DART 的
+完整生成循环一致性机制，而不是继续增加模块。当前仍不能称为通用检测器：
+VAR/HMAR 的 TPR@1%FPR 接近零，RAR-B 在不同 seed 下也有较大波动；实验仍
+限于小规模 C2I、模型特异监督、同五模型 bank 对照，尚无跨 codec、独立真实
+来源和官方完整八模型 bank 验证。下一阶段只验证这些跨域与低 FPR 缺口。
+
+项目测试：68 passed。第三方 TruFor 的全目录 pytest 收集仍缺少其独立依赖
+`yacs`，与 DART 测试无关。
+
+
+## 27. JPEG95 P2 smoke：宏观增益保留，VAR/HMAR 有压缩敏感性
+
+实现：`analysis/dart_codec_p0.py`；结果：`dart_c2i_jpeg95_smoke.json`。
+该实验仅使用 seed 0，训练和校准仍为原始图像，只把原 P1 的 300 张真实
+测试图和每类 100 张 fake 测试图重编码为 JPEG95。没有压缩图训练、阈值
+调整或测试集选择，属于**单 seed 跨 codec 示例诊断**。
+
+| 生成器 | 原图 DART AUROC | JPEG95 DART | 下降 | JPEG95 PRADA |
+|---|---:|---:|---:|---:|
+| VAR_d16 | 0.836 | 0.753 | 0.084 | 0.500 |
+| LlamaGen-B256 | 0.998 | 0.996 | 0.002 | 0.991 |
+| RAR-B | 0.943 | 0.922 | 0.021 | 0.545 |
+| HMAR-D16 | 0.831 | 0.766 | 0.065 | 0.503 |
+| **macro** | **0.902** | **0.859** | **0.043** | **0.635** |
+
+JPEG95 下 DART FPR=6%，仍处于预注册 3%–7% 区间；LlamaGen 的
+TPR@1%FPR=0.82，RAR-B=0.07，VAR/HMAR 仍为 0。保存的 8 个压缩测试
+AUROC 已独立重算，最大误差为 0。
+
+结论是：DART 相对同 bank PRADA 的宏观增益在 JPEG95 后仍然保留，且校准
+没有失效；RAR/LlamaGen 较稳健，但 VAR/HMAR 的 AUROC 下降较明显，不能
+宣称 codec-invariant。后续需用独立真实来源和更多 codec/seed 验证该现象，
+不通过新增模块事后修补这一单 seed 结果。项目测试：71 passed。
+
+
+## 28. ImageNet-V2 独立真实来源：外部 FPR=4.67%，宏观增益保持
+
+实现：`analysis/dart_external_real_p0.py`；结果：`dart_c2i_imagenetv2_smoke.json`。
+数据来自 `clip-benchmark/wds_imagenetv2` 的 matched-frequency shard0，仅下载
+一个约 320MB 分片，并确定性选择 300 张带 ImageNet 标签的真实图。保留完整
+000–999 类映射，避免条件标签错配。训练、归一化、conformal 阈值均沿用原
+ImageNet P1，不在 ImageNet-V2 上重新训练或调阈。该结果为**单分片、单 seed
+外部真实 smoke**。
+
+| 生成器 | DART AUROC | 同 bank PRADA | DART TPR@1%FPR |
+|---|---:|---:|---:|
+| VAR_d16 | 0.854 | 0.584 | 0.01 |
+| LlamaGen-B256 | 0.999 | 0.997 | 0.98 |
+| RAR-B | 0.953 | 0.637 | 0.53 |
+| HMAR-D16 | 0.847 | 0.597 | 0.01 |
+| **macro** | **0.913** | **0.704** | — |
+
+DART 外部真实 **FPR=4.67%**，处于预注册 3%–7% 区间；PRADA 为 2.00%。
+VAR/HMAR 在该外部真实来源上的 AUROC 没有下降，RAR/LlamaGen 也保持强结果。
+8 个外部 AUROC 已独立重算，最大误差为 0。
+
+这说明 P1 的校准不是只对原 ImageNet validation 分布有效，宏观增益也能迁移
+到独立真实来源；但单分片结果不能替代更多来源和多 seed 验证，VAR/HMAR 的
+低 FPR 检出率仍需单独报告。项目测试：73 passed。
+
+
+## 29. 低 FPR 工作点与当前最终判断
+
+`operating_points_real1000.json` 从保存的逐图分数独立计算 ROC 工作点。
+下表为 1000-real P1 的 9-seed 平均 TPR（括号内为范围）：
+
+| 生成器 | TPR@1%FPR | TPR@5%FPR | TPR@10%FPR |
+|---|---:|---:|---:|
+| VAR_d16 | 0.003（0–0.01） | 0.134（0.03–0.26） | 0.393（0.20–0.58） |
+| LlamaGen-B256 | 0.954（0.89–1.00） | 0.997（0.98–1.00） | 1.000 |
+| RAR-B | 0.387（0.06–0.58） | 0.733（0.61–0.85） | 0.861（0.74–0.92） |
+| HMAR-D16 | 0.002（0–0.01） | 0.100（0.01–0.21） | 0.350（0.19–0.45） |
+
+ImageNet-V2 seed 0 的 TPR@5%FPR 分别为 VAR 0.09、LlamaGen 1.00、RAR
+0.74、HMAR 0.11；JPEG95 分别为 0、0.99、0.65、0.02。这再次说明宏观
+AUROC 增益不能直接解释为所有家族在低误报下都实用。
+
+当前结论：完整循环一致性 DART 已形成清晰的 ICML 方法主线。它具备机制
+解释、多家族显著 AUROC 增益、9-seed 稳健性、JPEG95 保留增益和
+ImageNet-V2 外部 FPR=4.67% 的证据；不应继续无目的地叠加模块。投稿前仍
+应扩大跨域与低 FPR 实验，并明确模型特异监督、参考家族覆盖和小规模示例
+协议的边界。现阶段不能声称通用检测、codec-invariant、未知生成器
+zero-shot 或保证 ICML 录用。
