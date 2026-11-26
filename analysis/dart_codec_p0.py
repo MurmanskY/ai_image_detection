@@ -20,7 +20,9 @@ from analysis.dart_p0 import normalize_data, predict, scale_tensor, train_dart
 from analysis.scale_p0 import prada_score
 from prada.metrics import aeroblade
 
-OUT = os.path.join(c2i.OUT, "codec_jpeg95")
+QUALITY = int(os.environ.get("DART_CODEC_QUALITY", "95"))
+CODEC = f"jpeg{QUALITY}"
+OUT = os.path.join(c2i.OUT, f"codec_{CODEC}")
 SEEDS = tuple(int(x) for x in os.environ.get("DART_CODEC_SEEDS", "0").split(","))
 MODELS = c2i.MODELS
 DATASETS = c2i.DATASETS
@@ -33,9 +35,8 @@ MERGE_SHARDS = os.environ.get("DART_CODEC_MERGE", "0") == "1"
 
 def test_positions(ds, seed):
     if ds == "real":
-        perm = np.random.RandomState(seed).permutation(c2i.N_REAL)
-        return perm[c2i.N_REF_REAL + c2i.N_CAL_REAL:]
-    return c2i.fake_split(seed)[2]
+        return c2i.fixed_test_split(seed)[3]
+    return c2i.fixed_test_split(seed)[6]
 
 
 def codec_positions(ds):
@@ -58,10 +59,12 @@ def base_indices(ds):
         len(dataset), c2i.sample_count(ds), replace=False)
 
 
-class JPEG95Dataset(Dataset):
-    def __init__(self, ds, transform):
+class JPEGDataset(Dataset):
+    def __init__(self, ds, transform, positions=None):
         self.dataset = ImageFolder(os.path.join(c2i.DATA_ROOT, ds))
-        self.indices = base_indices(ds)[extraction_positions(ds)]
+        if positions is None:
+            positions = extraction_positions(ds)
+        self.indices = base_indices(ds)[positions]
         self.transform = transform
 
     def __len__(self):
@@ -70,16 +73,17 @@ class JPEG95Dataset(Dataset):
     def __getitem__(self, index):
         image, condition = self.dataset[int(self.indices[index])]
         buffer = io.BytesIO()
-        image.convert("RGB").save(buffer, format="JPEG", quality=95)
+        image.convert("RGB").save(buffer, format="JPEG", quality=QUALITY)
         buffer.seek(0)
         with Image.open(buffer) as compressed:
             image = compressed.convert("RGB")
         return self.transform(image), condition
 
 
-def loader(ds, wrapper, batch_size=1):
-    return DataLoader(JPEG95Dataset(ds, wrapper.transform), batch_size=batch_size,
-                      num_workers=c2i.NUM_WORKERS, pin_memory=True)
+def loader(ds, wrapper, batch_size=1, positions=None):
+    return DataLoader(JPEGDataset(ds, wrapper.transform, positions=positions),
+                      batch_size=batch_size, num_workers=c2i.NUM_WORKERS,
+                      pin_memory=True)
 
 
 def cache_path(ds, model, shard=True):
@@ -117,7 +121,7 @@ def extract_likelihood(model):
         if hasattr(wrapper, "scale_lengths"):
             features["scale_lengths"] = wrapper.scale_lengths
         save_features(features, path)
-        print(f"  jpeg95 likelihood {ds}/{model}", flush=True)
+        print(f"  {CODEC} likelihood {ds}/{model}", flush=True)
     del wrapper
     torch.cuda.empty_cache()
 
@@ -146,7 +150,7 @@ def extract_cycle(model):
                     ).cpu().reshape(-1))
             features[key] = torch.cat(values)
             save_features(features, path)
-            print(f"  jpeg95 {key} {ds}/{model}", flush=True)
+            print(f"  {CODEC} {key} {ds}/{model}", flush=True)
     del wrapper
     torch.cuda.empty_cache()
 
@@ -169,7 +173,7 @@ def merge_shards(model):
         if "scale_lengths" in shards[0]:
             output["scale_lengths"] = shards[0]["scale_lengths"]
         save_features(output, base)
-        print(f"  merged jpeg95 {ds}/{model}", flush=True)
+        print(f"  merged {CODEC} {ds}/{model}", flush=True)
 
 
 def pack_codec(ds, model):
@@ -191,22 +195,20 @@ def evaluate():
                 for ds in DATASETS for model in MODELS}
     compressed = {(ds, model): pack_codec(ds, model)
                   for ds in DATASETS for model in MODELS}
-    original_result = json.load(open(os.path.join(c2i.OUT, "dart_c2i_real1000.json")))
-    results = {"config": {"models": MODELS, "seeds": SEEDS, "codec": "JPEG95",
-                          "protocol": "original train/calibration; JPEG95 test; P2 smoke"},
+    results = {"config": {"models": MODELS, "seeds": SEEDS, "codec": CODEC,
+                          "protocol": "fixed seed0 test; reshuffled strict train/selection/calibration; compressed test"},
                "seeds": {}}
     train_fake = {"var_d20": "var_d16", "var_d30": "var_d16",
                   "llamagen_b256": "llamagen_b256",
                   "llamagen_l256": "llamagen_b256", "rar_l": "rar_b"}
     for seed in SEEDS:
-        real_perm = np.random.RandomState(seed).permutation(c2i.N_REAL)
-        ref_idx = real_perm[:c2i.N_REF_REAL]
-        cal_idx = real_perm[c2i.N_REF_REAL:c2i.N_REF_REAL + c2i.N_CAL_REAL]
-        test_idx = test_positions("real", seed)
+        (ref_idx, select_idx, cal_idx, test_idx,
+         train_idx, val_idx, fake_test) = c2i.fixed_test_split(seed)
         normalized, compressed_normalized = {}, {}
         for model in MODELS:
             inputs = {"real": original["real", model],
                       "fake": original[train_fake[model], model]}
+            inputs.update({gen: original[gen, model] for gen in FAKE_GENS})
             normalized[model] = normalize_data(inputs, ref_idx)
             ref = np.concatenate([original["real", model][i] for i in ref_idx], axis=0)
             mu, sd = ref.mean(axis=0), ref.std(axis=0) + 1e-6
@@ -217,30 +219,33 @@ def evaluate():
                     for ds in DATASETS}
         combined_prada = {ds: np.full(len(codec_positions(ds)), -np.inf, dtype=np.float32)
                           for ds in DATASETS}
-        real_cal, prada_cal = (np.full(c2i.N_REAL, -np.inf, dtype=np.float32)
-                               for _ in range(2))
+        original_combined = {ds: np.full(c2i.sample_count(ds), -np.inf, dtype=np.float32)
+                             for ds in DATASETS}
+        original_prada = {ds: np.full(c2i.sample_count(ds), -np.inf, dtype=np.float32)
+                          for ds in DATASETS}
         for model in MODELS:
-            train_idx, val_idx, _ = c2i.fake_split(seed)
             dart = train_dart(
                 (np.concatenate([normalized[model]["real"][ref_idx],
                                  normalized[model]["fake"][train_idx]]),
                  np.array([0] * c2i.N_REF_REAL + [1] * 100)),
-                (np.concatenate([normalized[model]["real"][cal_idx],
+                (np.concatenate([normalized[model]["real"][select_idx],
                                  normalized[model]["fake"][val_idx]]),
-                 np.array([0] * c2i.N_CAL_REAL + [1] * 50)), seed)
+                 np.array([0] * c2i.N_SELECT_REAL + [1] * 50)), seed)
             real_scores = predict(dart, normalized[model]["real"])
-            median = np.median(real_scores[cal_idx])
-            iqr = (np.percentile(real_scores[cal_idx], 75)
-                   - np.percentile(real_scores[cal_idx], 25) + 1e-6)
-            real_cal = np.maximum(real_cal, (real_scores - median) / iqr)
-            original_prada = c2i.prada_c2i("real", model)
-            prada_cal = np.maximum(prada_cal, original_prada)
+            median = np.median(real_scores[select_idx])
+            iqr = (np.percentile(real_scores[select_idx], 75)
+                   - np.percentile(real_scores[select_idx], 25) + 1e-6)
             for ds in DATASETS:
+                original_scores = predict(dart, normalized[model][ds])
+                original_combined[ds] = np.maximum(
+                    original_combined[ds], (original_scores - median) / iqr)
+                original_prada[ds] = np.maximum(
+                    original_prada[ds], c2i.prada_c2i(ds, model))
                 scores = predict(dart, compressed_normalized[model][ds])
                 combined[ds] = np.maximum(combined[ds], (scores - median) / iqr)
                 combined_prada[ds] = np.maximum(combined_prada[ds], codec_prada(ds, model))
-        tau = conformal_tau(real_cal[cal_idx])
-        prada_tau = conformal_tau(prada_cal[cal_idx])
+        tau = conformal_tau(original_combined["real"][cal_idx])
+        prada_tau = conformal_tau(original_prada["real"][cal_idx])
         per_gen = {}
         real_rows = position_rows("real", test_idx)
         for gen in FAKE_GENS:
@@ -250,23 +255,37 @@ def evaluate():
             dart_score = np.concatenate([combined["real"][real_rows], combined[gen][fake_rows]])
             prada = np.concatenate([combined_prada["real"][real_rows],
                                     combined_prada[gen][fake_rows]])
+            original_dart = np.concatenate([original_combined["real"][test_idx],
+                                            original_combined[gen][fake_test]])
+            original_prada_score = np.concatenate([original_prada["real"][test_idx],
+                                                   original_prada[gen][fake_test]])
             per_gen[gen] = {
-                "original": original_result["seeds"][str(seed)][gen],
-                "jpeg95": {"dart": c2i.metric(y, dart_score, c2i.N_TEST_REAL, tau),
-                           "prada": c2i.metric(y, prada, c2i.N_TEST_REAL, prada_tau)}}
-            np.savez(os.path.join(c2i.OUT, f"scores_dart_jpeg95_seed{seed}_{gen}.npz"),
-                     dart=dart_score, prada=prada, n_real=c2i.N_TEST_REAL)
+                "original": {"dart": c2i.metric(y, original_dart, c2i.N_TEST_REAL, tau),
+                             "prada": c2i.metric(y, original_prada_score,
+                                                 c2i.N_TEST_REAL, prada_tau)},
+                CODEC: {"dart": c2i.metric(y, dart_score, c2i.N_TEST_REAL, tau),
+                        "prada": c2i.metric(y, prada, c2i.N_TEST_REAL, prada_tau)}}
+            np.savez(os.path.join(
+                c2i.OUT, f"scores_dart_{CODEC}_strict_fixed_test_seed{seed}_{gen}.npz"),
+                dart=dart_score, prada=prada, n_real=c2i.N_TEST_REAL,
+                original_dart=original_dart, original_prada=original_prada_score,
+                dart_cal=original_combined["real"][cal_idx],
+                prada_cal=original_prada["real"][cal_idx],
+                dart_threshold=tau, prada_threshold=prada_tau)
         results["seeds"][str(seed)] = per_gen
-        print(f"JPEG95 seed {seed}: " + "; ".join(
-            f"{gen}={per_gen[gen]['jpeg95']['dart']['AUROC']:.4f}" for gen in FAKE_GENS),
+        print(f"{CODEC} seed {seed}: " + "; ".join(
+            f"{gen}={per_gen[gen][CODEC]['dart']['AUROC']:.4f}" for gen in FAKE_GENS),
             flush=True)
     results["summary"] = {
-        "macro_AUROC": [float(np.mean([
-            results["seeds"][str(seed)][gen]["jpeg95"]["dart"]["AUROC"]
+        "original_macro_AUROC": [float(np.mean([
+            results["seeds"][str(seed)][gen]["original"]["dart"]["AUROC"]
             for gen in FAKE_GENS])) for seed in SEEDS],
-        "FPR": [float(results["seeds"][str(seed)]["var_d16"]["jpeg95"]["dart"]["FPR"])
+        "macro_AUROC": [float(np.mean([
+            results["seeds"][str(seed)][gen][CODEC]["dart"]["AUROC"]
+            for gen in FAKE_GENS])) for seed in SEEDS],
+        "FPR": [float(results["seeds"][str(seed)]["var_d16"][CODEC]["dart"]["FPR"])
                 for seed in SEEDS]}
-    path = os.path.join(c2i.OUT, "dart_c2i_jpeg95_smoke.json")
+    path = os.path.join(c2i.OUT, f"dart_c2i_{CODEC}_strict_fixed_test.json")
     with open(path, "w") as f:
         json.dump(results, f, indent=2)
     print(json.dumps(results["summary"], indent=2), flush=True)

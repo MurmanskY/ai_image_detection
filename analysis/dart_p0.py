@@ -50,6 +50,25 @@ def scale_tensor(diff, scale_lengths, quant_err=None, rec_err=None):
     return outputs
 
 
+def select_feature_mode(images, mode):
+    base = list(range(18))
+    metadata = [16, 17]
+    modes = {
+        "likelihood": base,
+        "quantization": metadata + [18],
+        "reconstruction": metadata + [19],
+        "likelihood_quantization": base + [18],
+        "likelihood_reconstruction": base + [19],
+        "quantization_reconstruction": metadata + [18, 19],
+        "full": list(range(20)),
+        "full_no_metadata": list(range(16)) + [18, 19],
+    }
+    if mode not in modes:
+        raise ValueError(f"unknown feature mode: {mode}")
+    columns = modes[mode]
+    return [image[:, columns] for image in images]
+
+
 def pack_model_data(model):
     packed = {}
     for ds in ("real", model):
@@ -87,8 +106,11 @@ def batches(images, labels, batch_size, rng=None):
 
 
 class ScaleDeepSet(nn.Module):
-    def __init__(self, input_dim=18):
+    def __init__(self, input_dim=18, pooling="attention"):
         super().__init__()
+        if pooling not in ("attention", "mean", "sum"):
+            raise ValueError(f"unknown pooling: {pooling}")
+        self.pooling = pooling
         self.encoder = nn.Sequential(nn.Linear(input_dim, 32), nn.GELU(),
                                      nn.Linear(32, 16), nn.GELU())
         self.attention = nn.Linear(16, 1)
@@ -96,16 +118,24 @@ class ScaleDeepSet(nn.Module):
 
     def forward(self, x, mask):
         h = self.encoder(x)
-        logits = self.attention(h).squeeze(-1)
-        logits = logits.masked_fill(~mask, -1e4)
-        weights = torch.softmax(logits, dim=1)
-        pooled = (weights.unsqueeze(-1) * h).sum(dim=1)
+        if self.pooling == "attention":
+            logits = self.attention(h).squeeze(-1)
+            logits = logits.masked_fill(~mask, -1e4)
+            weights = torch.softmax(logits, dim=1)
+        else:
+            weights = mask.to(h.dtype).unsqueeze(-1)
+            if self.pooling == "mean":
+                weights = weights / mask.sum(dim=1, keepdim=True).clamp_min(1).unsqueeze(-1)
+        if self.pooling == "attention":
+            pooled = (weights.unsqueeze(-1) * h).sum(dim=1)
+        else:
+            pooled = (weights * h).sum(dim=1)
         return self.classifier(pooled).squeeze(-1)
 
 
-def train_dart(train_data, val_data, seed, epochs=40):
+def train_dart(train_data, val_data, seed, epochs=40, pooling="attention"):
     torch.manual_seed(seed)
-    model = ScaleDeepSet(input_dim=train_data[0][0].shape[1])
+    model = ScaleDeepSet(input_dim=train_data[0][0].shape[1], pooling=pooling)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
     criterion = nn.BCEWithLogitsLoss()
     best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}

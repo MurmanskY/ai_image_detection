@@ -41,8 +41,9 @@ SEEDS = tuple(int(x) for x in os.environ.get(
 N_IMAGES = 250
 N_REAL = int(os.environ.get("DART_N_REAL", str(N_IMAGES)))
 N_REF_REAL = int(os.environ.get("DART_REF_REAL", "100"))
+N_SELECT_REAL = int(os.environ.get("DART_SELECT_REAL", "50"))
 N_CAL_REAL = int(os.environ.get("DART_CAL_REAL", "50"))
-N_TEST_REAL = N_REAL - N_REF_REAL - N_CAL_REAL
+N_TEST_REAL = N_REAL - N_REF_REAL - N_SELECT_REAL - N_CAL_REAL
 BATCH_SIZE = int(os.environ.get("DART_BATCH_SIZE", "4"))
 NUM_WORKERS = int(os.environ.get("DART_NUM_WORKERS", "2"))
 EXTRACT_ONLY = os.environ.get("DART_EXTRACT_ONLY", "0") == "1"
@@ -54,9 +55,32 @@ def sample_count(ds):
     return N_REAL if ds == "real" else N_IMAGES
 
 
+def real_split(seed):
+    perm = np.random.RandomState(seed).permutation(N_REAL)
+    ref_end = N_REF_REAL
+    select_end = ref_end + N_SELECT_REAL
+    cal_end = select_end + N_CAL_REAL
+    return perm[:ref_end], perm[ref_end:select_end], perm[select_end:cal_end], perm[cal_end:]
+
+
 def fake_split(seed):
     perm = np.random.RandomState(100 + seed).permutation(N_IMAGES)
     return perm[:100], perm[100:150], perm[150:]
+
+
+def fixed_test_split(seed):
+    base_real = real_split(0)
+    base_fake = fake_split(0)
+    if seed == 0:
+        return base_real + base_fake
+    real_pool = np.concatenate(base_real[:3])
+    real_perm = np.random.RandomState(seed).permutation(real_pool)
+    fake_pool = np.concatenate(base_fake[:2])
+    fake_perm = np.random.RandomState(100 + seed).permutation(fake_pool)
+    return (real_perm[:N_REF_REAL],
+            real_perm[N_REF_REAL:N_REF_REAL + N_SELECT_REAL],
+            real_perm[N_REF_REAL + N_SELECT_REAL:],
+            base_real[3], fake_perm[:100], fake_perm[100:], base_fake[2])
 
 
 def acquire_gpu():
@@ -229,13 +253,26 @@ def prada_c2i(ds, model):
     return prada_score(feat, model)
 
 
+def wilson_interval(k, n, z=1.959963984540054):
+    p = k / n
+    denominator = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denominator
+    radius = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denominator
+    return [float(center - radius), float(center + radius)]
+
+
 def metric(y, score, n_real, tau):
     fpr, tpr, _ = roc_curve(y, score)
-    return {"AUROC": float(roc_auc_score(y, score)),
-            "AP": float(average_precision_score(y, score)),
-            "TPR@1%FPR": float(tpr[fpr <= 0.01].max())
-            if np.any(fpr <= 0.01) else 0.0,
-            "FPR": float((score[:n_real] > tau).mean())}
+    false_positives = int((score[:n_real] > tau).sum())
+    result = {"AUROC": float(roc_auc_score(y, score)),
+              "AP": float(average_precision_score(y, score)),
+              "FPR": float(false_positives / n_real),
+              "FPR_CI95": wilson_interval(false_positives, n_real)}
+    for level in (0.001, 0.01, 0.05, 0.1):
+        mask = fpr <= level
+        result[f"TPR@{level * 100:g}%FPR"] = float(tpr[mask].max()) \
+            if np.any(mask) else 0.0
+    return result
 
 
 def main():
@@ -255,15 +292,12 @@ def main():
     score_prefix = f"scores_{os.path.splitext(result_name)[0]}"
     results = {"config": {"models": MODELS, "generators": FAKE_GENS,
                           "n_images": N_IMAGES, "n_real": N_REAL,
-                          "real_ref": N_REF_REAL, "real_cal": N_CAL_REAL,
-                          "real_test": N_TEST_REAL,
-                          "protocol": f"dart-c2i-real{N_REAL}-fake{N_IMAGES} 示例"},
+                          "real_ref": N_REF_REAL, "real_select": N_SELECT_REAL,
+                          "real_cal": N_CAL_REAL, "real_test": N_TEST_REAL,
+                          "protocol": f"dart-c2i-strict-split-real{N_REAL}-fake{N_IMAGES} 示例"},
                "seeds": {}}
     for seed in SEEDS:
-        real_perm = np.random.RandomState(seed).permutation(N_REAL)
-        ref_idx = real_perm[:N_REF_REAL]
-        cal_idx = real_perm[N_REF_REAL:N_REF_REAL + N_CAL_REAL]
-        test_idx = real_perm[N_REF_REAL + N_CAL_REAL:]
+        ref_idx, select_idx, cal_idx, test_idx = real_split(seed)
         train_fake = {"var_d20": "var_d16", "var_d30": "var_d16",
                       "llamagen_b256": "llamagen_b256",
                       "llamagen_l256": "llamagen_b256", "rar_l": "rar_b"}
@@ -285,15 +319,15 @@ def main():
                 (np.concatenate([normalized[model]["real"][ref_idx],
                                  normalized[model]["fake"][train_fake]]),
                  np.array([0] * N_REF_REAL + [1] * 100)),
-                (np.concatenate([normalized[model]["real"][cal_idx],
+                (np.concatenate([normalized[model]["real"][select_idx],
                                  normalized[model]["fake"][val_fake]]),
-                 np.array([0] * N_CAL_REAL + [1] * 50)), seed)
+                 np.array([0] * N_SELECT_REAL + [1] * 50)), seed)
             model_scores = {}
             for ds in DATASETS:
                 model_scores[ds] = predict(model_dart, normalized[model][ds])
-            median = np.median(model_scores["real"][cal_idx])
-            iqr = (np.percentile(model_scores["real"][cal_idx], 75)
-                   - np.percentile(model_scores["real"][cal_idx], 25) + 1e-6)
+            median = np.median(model_scores["real"][select_idx])
+            iqr = (np.percentile(model_scores["real"][select_idx], 75)
+                   - np.percentile(model_scores["real"][select_idx], 25) + 1e-6)
             for ds in DATASETS:
                 z_score = (model_scores[ds] - median) / iqr
                 if not np.isfinite(z_score).all():
@@ -309,12 +343,16 @@ def main():
                                          combined_dart[g][test_fake]])
             prada = np.concatenate([combined_prada["real"][test_idx],
                                     combined_prada[g][test_fake]])
-            tau = conformal_tau(combined_dart["real"][cal_idx])
-            prada_tau = conformal_tau(combined_prada["real"][cal_idx])
+            dart_cal = combined_dart["real"][cal_idx]
+            prada_cal = combined_prada["real"][cal_idx]
+            tau = conformal_tau(dart_cal)
+            prada_tau = conformal_tau(prada_cal)
             per_gen[g] = {"dart": metric(y, dart_score, N_TEST_REAL, tau),
                           "prada": metric(y, prada, N_TEST_REAL, prada_tau)}
             np.savez(os.path.join(OUT, f"{score_prefix}_seed{seed}_{g}.npz"),
-                     dart=dart_score, prada=prada, n_real=N_TEST_REAL)
+                     dart=dart_score, prada=prada, n_real=N_TEST_REAL,
+                     dart_cal=dart_cal, prada_cal=prada_cal,
+                     dart_threshold=tau, prada_threshold=prada_tau)
         results["seeds"][str(seed)] = per_gen
         print(f"seed {seed}: " + "; ".join(
             f"{m}={np.mean([per_gen[g][m]['AUROC'] for g in FAKE_GENS]):.4f}"

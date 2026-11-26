@@ -89,3 +89,78 @@ def test_c2i_fake_train_validation_test_are_disjoint():
     assert not set(train) & set(validation)
     assert not set(train) & set(test)
     assert not set(validation) & set(test)
+
+
+def test_c2i_real_selection_calibration_and_test_are_disjoint(monkeypatch):
+    import analysis.dart_c2i_p0 as c2i
+
+    monkeypatch.setattr(c2i, "N_REAL", 1000)
+    monkeypatch.setattr(c2i, "N_REF_REAL", 300)
+    monkeypatch.setattr(c2i, "N_SELECT_REAL", 200)
+    monkeypatch.setattr(c2i, "N_CAL_REAL", 200)
+    parts = c2i.real_split(0)
+    assert [len(x) for x in parts] == [300, 200, 200, 300]
+    for i, first in enumerate(parts):
+        for second in parts[i + 1:]:
+            assert not set(first) & set(second)
+
+
+def test_c2i_metric_has_fpr_interval_and_all_working_points():
+    from analysis.dart_c2i_p0 import metric, wilson_interval
+
+    y = np.array([0, 0, 1, 1])
+    score = np.array([0.0, 0.2, 0.8, 1.0])
+    result = metric(y, score, 2, 0.5)
+    assert result["FPR"] == 0.0
+    assert result["FPR_CI95"][0] == 0.0
+    assert wilson_interval(10, 200)[0] < 0.05 < wilson_interval(10, 200)[1]
+    for level in ("0.1", "1", "5", "10"):
+        assert f"TPR@{level}%FPR" in result
+
+
+def test_dart_feature_combinations_keep_expected_columns():
+    from analysis.dart_p0 import select_feature_mode
+
+    images = np.asarray([np.arange(40, dtype=np.float32).reshape(2, 20)], dtype=object)
+    expected = {"likelihood": 18, "quantization": 3, "reconstruction": 3,
+                "likelihood_quantization": 19, "likelihood_reconstruction": 19,
+                "quantization_reconstruction": 4, "full": 20,
+                "full_no_metadata": 18}
+    for mode, width in expected.items():
+        selected = select_feature_mode(images, mode)
+        assert selected[0].shape == (2, width)
+    assert np.array_equal(select_feature_mode(images, "likelihood")[0][:, -1],
+                          images[0][:, 17])
+    assert np.array_equal(select_feature_mode(images, "reconstruction")[0][:, -1],
+                          images[0][:, 19])
+    assert np.array_equal(select_feature_mode(images, "quantization")[0],
+                          images[0][:, [16, 17, 18]])
+
+
+def test_dart_pooling_variants_have_identical_parameter_counts():
+    models = [ScaleDeepSet(pooling=pooling).eval()
+              for pooling in ("attention", "mean", "sum")]
+    assert len({sum(p.numel() for p in model.parameters()) for model in models}) == 1
+    x = torch.randn(2, 3, 18)
+    mask = torch.tensor([[True, True, True], [True, False, False]])
+    with torch.no_grad():
+        outputs = [model(x, mask) for model in models]
+    assert all(output.shape == (2,) and torch.isfinite(output).all()
+               for output in outputs)
+
+
+def test_fixed_test_split_never_reuses_test_images(monkeypatch):
+    import analysis.dart_c2i_p0 as c2i
+
+    monkeypatch.setattr(c2i, "N_REAL", 1000)
+    monkeypatch.setattr(c2i, "N_REF_REAL", 300)
+    monkeypatch.setattr(c2i, "N_SELECT_REAL", 200)
+    monkeypatch.setattr(c2i, "N_CAL_REAL", 200)
+    splits = [c2i.fixed_test_split(seed) for seed in range(3)]
+    assert np.array_equal(splits[0][3], splits[1][3])
+    assert np.array_equal(splits[0][6], splits[2][6])
+    for parts in splits:
+        ref, select, cal, test, train, val, fake_test = parts
+        assert not set(test) & (set(ref) | set(select) | set(cal))
+        assert not set(fake_test) & (set(train) | set(val))
+        assert not set(train) & set(val)

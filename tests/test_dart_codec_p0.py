@@ -6,8 +6,9 @@ from analysis import dart_codec_p0 as codec
 
 def configure_real1000(monkeypatch):
     monkeypatch.setattr(c2i, "N_REAL", 1000)
-    monkeypatch.setattr(c2i, "N_REF_REAL", 400)
-    monkeypatch.setattr(c2i, "N_CAL_REAL", 300)
+    monkeypatch.setattr(c2i, "N_REF_REAL", 300)
+    monkeypatch.setattr(c2i, "N_SELECT_REAL", 200)
+    monkeypatch.setattr(c2i, "N_CAL_REAL", 200)
     monkeypatch.setattr(c2i, "N_TEST_REAL", 300)
 
 

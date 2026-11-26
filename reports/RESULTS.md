@@ -1337,3 +1337,162 @@ ImageNet-V2 外部 FPR=4.67% 的证据；不应继续无目的地叠加模块。
 应扩大跨域与低 FPR 实验，并明确模型特异监督、参考家族覆盖和小规模示例
 协议的边界。现阶段不能声称通用检测、codec-invariant、未知生成器
 zero-shot 或保证 ICML 录用。
+
+
+## 30. 严格四划分复核：消除 calibration 复用后主要增益保持
+
+针对 `DART_ICML_next_steps.md` 的 P0-1，主评估改为四个互斥真实集合：
+300 reference/train、200 model-selection + median/IQR、200 独立 conformal
+calibration、300 test。fake 仍为互斥 100 train/50 validation/100 test。
+conformal 集合不再参与 checkpoint、归一化或模型选择；bank 在校准前冻结。
+
+新结果：`dart_c2i_strict_split.json`、`dart_c2i_strict_split_s3_8.json`、
+`strict_split_audit.json`。NPZ 保存 test/calibration 分数及阈值，可独立复算。
+
+- 9-seed macro AUROC：**0.906 ± 0.013**；最小 seed 增益为 +0.233；
+- seed 0 paired macro ΔAUROC=+0.233，95%CI [+0.206,+0.260]；
+- VAR/RAR/HMAR 的 seed 0 paired CI 均显著为正，LlamaGen 不显著；
+- FPR 依次为 5.33%、5.00%、4.33%、5.00%、4.33%、2.33%、5.00%、2.67%、
+  4.67%，没有 seed 超过 7%；seed 5/7 因偏保守、低于 3% 下限，严格
+  all-9 GO=false，不修改标准；
+- 每 seed 均报告 Wilson FPR 95%CI 和 TPR@0.1/1/5/10%FPR；
+- 72 个 AUROC、72 个 calibration 阈值、288 个工作点均独立复算一致。
+
+严格协议的 VAR/HMAR TPR@5%FPR 均值为 0.221/0.194，较旧协议有所改善，
+但仍明显弱于 RAR/LlamaGen，不能宣称低 FPR 问题已解决。
+
+### 30.1 严格 JPEG95 与 ImageNet-V2 复评
+
+复用既有特征，仅重训并使用严格四划分：
+
+| 实验 | DART macro AUROC | 同 bank PRADA | DART FPR | FPR 95%CI |
+|---|---:|---:|---:|---:|
+| JPEG95 seed 0 | 0.844 | 约 0.635 | 5.67% | [3.57%,8.89%] |
+| ImageNet-V2 seed 0 | 0.902 | 0.704 | 5.33% | [3.31%,8.49%] |
+
+JPEG95 相对同 seed 原图 0.888 下降 0.043，VAR/HMAR 的压缩敏感性仍存在；
+ImageNet-V2 在不重调阈值时外部 FPR 保持有效。新文件为
+`dart_c2i_jpeg95_strict.json`、`dart_c2i_imagenetv2_strict.json`，逐样本
+calibration/test 分数与阈值均已保存。旧 smoke 数字保留作历史记录，不用于
+声称标准 split-conformal 保证。项目测试：79 passed。
+
+
+## 31. 严格未知家族、完整消融与 model-bank coverage
+
+实现：`analysis/dart_family_p0.py`。T2I 的 Infinity、Janus、LlamaGen-XL、
+Switti 分别作为完全留出生成器家族；held-out fake 不进入训练或验证。真实
+数据沿用严格 300/200/200/300 四划分，fake 为互斥 100/50/100。完整循环
+DART 使用共享模型和模型内归一化，不把该协议与 C2I 已知家族结果混称。
+
+### 31.1 两种未知家族协议
+
+| 协议 | DART macro AUROC | 同 bank PRADA | 解释 |
+|---|---:|---:|---|
+| 家族与参考模型同时移除 | 0.790 | 0.728 | 严格缺失目标家族 |
+| 目标 fake 留出、参考模型可用 | 0.855 | 0.989 | 参考可用但弱于强基线 |
+
+严格排除时，Infinity/Janus/LlamaGen/Switti 的 DART 均值分别为
+0.800/0.784/0.785/0.790，显示一定但有限的跨家族能力。参考可用时 PRADA
+接近 0.989，不能宣称 DART 在该设置下优于 PRADA。
+
+逐参考模型特异训练在严格排除时只有 0.631，Switti 接近 0.50，故不扩展。
+固定 bank 聚合中 max 对 DART 最优；mean/median 分别为 0.771/0.774。
+reference-available 下 max/mean/median 为 0.855/0.809/0.814。
+
+### 31.2 完整特征组合消融（严格排除，3 seeds）
+
+| 特征 | macro AUROC |
+|---|---:|
+| Likelihood | 0.640 |
+| Quantization-only | 0.577 |
+| Reconstruction-only | 0.746 |
+| Likelihood + quantization | 0.657 |
+| **Likelihood + reconstruction** | **0.797** |
+| Quantization + reconstruction | 0.759 |
+| Full，无 scale metadata | 0.795 |
+| Full | 0.790 |
+
+未知家族增益主要来自 likelihood 与 decoder reconstruction 的互补；
+quantization 在该协议下没有稳定增益。新 seeds 3–5 上 L+R=0.805、full=0.799，
+方向一致但差异很小，只能视为候选简化，不能声称显著提升。
+
+参数量完全一致的 pooling 对照：L+R attention/mean/sum 分别为
+0.797/0.796/0.775；full 为 0.790/0.795/0.759。attention 没有大幅优势，
+但 mean 在部分 seed 的 FPR 达 8%，因此保留 attention 和 max，不作事后更换。
+
+### 31.3 C2I model-bank coverage（严格 3 seeds）
+
+| Bank | VAR-d16 | LlamaGen-B256 | RAR-B | HMAR-D16 | macro 范围 |
+|---|---:|---:|---:|---:|---:|
+| VAR only | 0.896–0.927 | 0.792–0.798 | 0.452–0.496 | 0.885–0.920 | 0.765–0.774 |
+| + LlamaGen | 0.849–0.900 | 0.999–1.000 | 0.476–0.530 | 0.846–0.887 | 0.797–0.829 |
+| + RAR（完整） | 0.811–0.870 | 0.996–0.999 | 0.933–0.937 | 0.810–0.856 | 0.888–0.916 |
+
+覆盖是必要条件，但 max 聚合存在跨家族分数与校准权衡：加入新模型并非对
+所有已有家族单调有益。结果文件：`dart_c2i_bank_var.json`、
+`dart_c2i_bank_var_llamagen.json`、`dart_c2i_strict_split.json`。
+
+### 31.4 统一审计
+
+`family_holdout_audit.json` 覆盖 16 个结果文件，独立复算 **1152 个 AUROC、
+1152 个阈值和 4608 个 TPR 工作点**，全部一致。严格跨域审计
+`strict_transfer_audit.json` 覆盖 16 个 AUROC、16 个阈值和 64 个工作点，
+全部一致。家族 NPZ 同时保存逐模型 bank、calibration、模型名单与所有聚合
+阈值，避免只保存最终 max 而无法复核。
+
+
+## 32. 多 codec 固定测试集三 seed：稳定的压缩退化曲线
+
+实现：`analysis/dart_codec_p0.py`；审计：`codec_matrix_audit.json`。
+为避免多 seed 重复特征提取，300 张真实测试图与每类 100 张 fake 测试图在
+所有 seed 中固定；每个 seed 仅重排剩余 700 张真实的 300/200/200
+训练/选择/校准集合，以及 fake 的 100/50 训练验证集合。测试图从不进入
+训练、模型选择或校准。四种 codec 均复用相同测试位置，且同时重算原图指标。
+
+协议为：原始训练/选择/校准 → 压缩测试，不与压缩校准或压缩训练混用。
+
+| Codec | DART macro AUROC（3-seed 均值±标准差） | 相对原图下降 | FPR（3 seeds） |
+|---|---:|---:|---|
+| JPEG95 | 0.849 ± 0.007 | 0.044 | 5.67% / 7.33% / 8.67% |
+| JPEG85 | 0.778 ± 0.011 | 0.115 | 6.33% / 7.33% / 9.00% |
+| JPEG75 | 0.740 ± 0.005 | 0.153 | 5.33% / 7.33% / 7.33% |
+| JPEG50 | 0.697 ± 0.002 | 0.197 | 6.00% / 7.00% / 6.67% |
+
+固定测试集上的原图 macro 均值为 0.893 ± 0.007。压缩后生成器均值：
+
+| Codec | VAR-d16 | LlamaGen-B256 | RAR-B | HMAR-D16 |
+|---|---:|---:|---:|---:|
+| JPEG95 | 0.736 | 0.995 | 0.908 | 0.757 |
+| JPEG85 | 0.601 | 0.988 | 0.892 | 0.632 |
+| JPEG75 | 0.544 | 0.976 | 0.851 | 0.590 |
+| JPEG50 | 0.496 | 0.941 | 0.808 | 0.542 |
+
+结论：压缩退化随强度稳定加剧，不是单 seed 偶然。LlamaGen/RAR 相对稳健，
+VAR/HMAR 在中高压缩下明显失效；部分 seed 的压缩 FPR 也超过 7%。不能声称
+codec-invariant，且当前协议只回答测试分布偏移，不代表压缩校准或压缩训练
+适配结果。
+
+独立复算 192 个原图/压缩 AUROC、96 个 calibration 阈值和 768 个工作点，
+全部一致。项目测试：81 passed。
+
+
+## 33. JPEG85 三种协议：校准迁移与完整压缩域适配
+
+实现：`analysis/dart_codec_calibration.py`、`analysis/dart_codec_full_adaptation.py`。
+审计：`codec_adaptation_audit.json`。以下结果严格分开，不能混称为同一个
+codec robustness 数字。
+
+| 协议 | DART macro AUROC | DART FPR | 解释 |
+|---|---:|---:|---|
+| 原图训练/选择/校准 → JPEG85 测试 | 0.767 | 6.33% | 纯测试分布偏移 |
+| 原图训练/选择；独立 JPEG85 校准与测试 | 0.767 | 5.00% | 只修复阈值，不改变排序 |
+| JPEG85 训练/选择/校准/测试 | 0.780 | 7.00% | 完整压缩域适配，收益有限 |
+
+压缩校准协议的 AUROC 与纯测试偏移逐值一致（最大差 0），确认只改变阈值。
+完整压缩训练的逐生成器结果为 VAR 0.603、LlamaGen 0.997、RAR 0.884、
+HMAR 0.638；相较原训练的 0.575/0.989/0.900/0.606，VAR/HMAR 小幅恢复，
+RAR 略降，不能声称全面恢复。
+
+两种适配协议共 16 个 AUROC、16 个 calibration 阈值和 64 个工作点均独立
+复算一致。当前结论是：压缩校准可修复 FPR 偏移，但无法恢复 VAR/HMAR 的
+检测信号；完整压缩训练也只有有限且不均衡的收益。项目测试：83 passed。

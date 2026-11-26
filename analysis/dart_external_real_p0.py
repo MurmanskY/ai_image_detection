@@ -174,9 +174,7 @@ def evaluate(seed=0):
     original = {(ds, model): c2i.pack(ds, model)
                 for ds in c2i.DATASETS for model in c2i.MODELS}
     external = {model: pack(model) for model in c2i.MODELS}
-    real_perm = np.random.RandomState(seed).permutation(c2i.N_REAL)
-    ref_idx = real_perm[:c2i.N_REF_REAL]
-    cal_idx = real_perm[c2i.N_REF_REAL:c2i.N_REF_REAL + c2i.N_CAL_REAL]
+    ref_idx, select_idx, cal_idx, _ = c2i.real_split(seed)
     train_fake = {"var_d20": "var_d16", "var_d30": "var_d16",
                   "llamagen_b256": "llamagen_b256",
                   "llamagen_l256": "llamagen_b256", "rar_l": "rar_b"}
@@ -198,12 +196,12 @@ def evaluate(seed=0):
         dart = train_dart(
             (np.concatenate([normalized["real"][ref_idx], normalized["fake"][train_idx]]),
              np.array([0] * c2i.N_REF_REAL + [1] * 100)),
-            (np.concatenate([normalized["real"][cal_idx], normalized["fake"][val_idx]]),
-             np.array([0] * c2i.N_CAL_REAL + [1] * 50)), seed)
+            (np.concatenate([normalized["real"][select_idx], normalized["fake"][val_idx]]),
+             np.array([0] * c2i.N_SELECT_REAL + [1] * 50)), seed)
         real_scores = predict(dart, normalized["real"])
-        median = np.median(real_scores[cal_idx])
-        iqr = (np.percentile(real_scores[cal_idx], 75)
-               - np.percentile(real_scores[cal_idx], 25) + 1e-6)
+        median = np.median(real_scores[select_idx])
+        iqr = (np.percentile(real_scores[select_idx], 75)
+               - np.percentile(real_scores[select_idx], 25) + 1e-6)
         real_cal = np.maximum(real_cal, (real_scores - median) / iqr)
         prada_cal = np.maximum(prada_cal, c2i.prada_c2i("real", model))
         external_dart = np.maximum(
@@ -218,9 +216,13 @@ def evaluate(seed=0):
     tau = conformal_tau(real_cal[cal_idx])
     prada_tau = conformal_tau(prada_cal[cal_idx])
     results = {"config": {"seed": seed, "external_real": "ImageNet-V2 matched-frequency shard0",
-                          "n_external": 300, "protocol": "original train/calibration; no retuning"},
+                          "n_external": 300,
+                          "protocol": "strict original train/selection/calibration; no retuning"},
                "external_FPR": {"dart": float((external_dart > tau).mean()),
                                 "prada": float((external_prada > prada_tau).mean())},
+               "external_FPR_CI95": {
+                   "dart": c2i.wilson_interval(int((external_dart > tau).sum()), 300),
+                   "prada": c2i.wilson_interval(int((external_prada > prada_tau).sum()), 300)},
                "generators": {}}
     _, _, test_fake = c2i.fake_split(seed)
     for gen in c2i.FAKE_GENS:
@@ -229,12 +231,14 @@ def evaluate(seed=0):
         prada = np.concatenate([external_prada, fake_prada[gen][test_fake]])
         results["generators"][gen] = {"dart": c2i.metric(y, dart, 300, tau),
                                       "prada": c2i.metric(y, prada, 300, prada_tau)}
-        np.savez(os.path.join(c2i.OUT, f"scores_dart_imagenetv2_seed{seed}_{gen}.npz"),
-                 dart=dart, prada=prada, n_real=300)
+        np.savez(os.path.join(c2i.OUT, f"scores_dart_imagenetv2_strict_seed{seed}_{gen}.npz"),
+                 dart=dart, prada=prada, n_real=300,
+                 dart_cal=real_cal[cal_idx], prada_cal=prada_cal[cal_idx],
+                 dart_threshold=tau, prada_threshold=prada_tau)
     results["macro_AUROC"] = {
         method: float(np.mean([results["generators"][gen][method]["AUROC"]
                                for gen in c2i.FAKE_GENS])) for method in ("dart", "prada")}
-    path = os.path.join(c2i.OUT, "dart_c2i_imagenetv2_smoke.json")
+    path = os.path.join(c2i.OUT, "dart_c2i_imagenetv2_strict.json")
     with open(path, "w") as f:
         json.dump(results, f, indent=2)
     print(json.dumps(results, indent=2), flush=True)

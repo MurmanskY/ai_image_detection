@@ -109,3 +109,35 @@ SCALE、QSCALE 和共享 DART 均未达到 PRADA，不能支持“无需监督�
 ## 投稿判断
 
 方法已经具备明确机制创新和可重复的小规模性能证据，P1 前三 seed 通过预注册 GO，9-seed AUROC 增益稳定，JPEG95 和 ImageNet-V2 smoke 均保留宏观增益。主要剩余问题是 9-seed 严格校准一次边界失败、VAR/HMAR 低 FPR 检出率弱，以及跨域实验仍属小规模。当前可形成 ICML 方法论文的实验主线，但投稿前仍需补足多 seed 跨域、低 FPR 工作点和更完整基线对照，不能承诺录用。
+
+
+## 严格四划分更新（优先于旧 P1 协议）
+
+根据后续指南，当前评估已将真实数据拆为 300 reference/train、200 selection+median/IQR、200 独立 conformal calibration、300 test，fake 保持互斥 100/50/100。checkpoint、归一化和 model bank 在 conformal calibration 前冻结；calibration 只用于最终阈值。
+
+9-seed macro AUROC 为 **0.906 ± 0.013**，seed 0 paired Δ=+0.233，95%CI [+0.206,+0.260]。FPR 没有超过 7%，但 seed 5/7 因偏保守、低于 3% 下限，严格 all-9 GO=false。逐样本 calibration/test 分数和阈值均已保存；72 个 AUROC、72 个阈值及 288 个工作点独立复算一致。
+
+严格 JPEG95 seed 0 macro AUROC=0.844、FPR=5.67%；ImageNet-V2 seed 0 macro=0.902、外部 FPR=5.33%。结果分别为 `dart_c2i_jpeg95_strict.json` 和 `dart_c2i_imagenetv2_strict.json`。这些结果替代旧协议对有限样本 conformal 保证的解释，但仍不代表完整跨 codec 或跨数据集证明。
+
+
+## 严格未知家族与 bank 覆盖更新
+
+`analysis/dart_family_p0.py` 在 Infinity、Janus、LlamaGen-XL、Switti 上实施真正 held-out-family：目标 fake 不参与训练/验证。目标参考模型也移除时，共享完整循环 DART macro AUROC=0.790，高于同 bank PRADA 0.728；参考模型可用时 DART=0.855、PRADA=0.989，因此不能笼统宣称优于 PRADA。
+
+完整消融显示未知家族主要由 likelihood + reconstruction 驱动（0.797），quantization-only 仅 0.577；新 seeds 3–5 的 L+R/full 为 0.805/0.799，差异很小。模型特异训练在严格排除时仅 0.631。max/mean/median 中 max 对 DART 最优，attention/mean/sum 未显示需要更换 attention 的稳定证据。
+
+C2I bank 实验进一步确认覆盖效应：VAR-only、VAR+LlamaGen、完整 bank 的 macro 范围分别为 0.765–0.774、0.797–0.829、0.888–0.916。完整 bank 补齐 RAR，但 max 聚合对部分已有家族存在分数/校准权衡。所有家族结果与逐模型 bank 分数均已独立复算，见 `family_holdout_audit.json`。
+
+
+## 多 codec 固定测试集复核
+
+JPEG95/85/75/50 均已完成 3-seed 固定测试集评估。测试真实 300、每类 fake 100 在所有 seed 中固定，训练/选择/校准只在剩余样本中重排，保持严格隔离。平均 macro AUROC 分别为 **0.849/0.778/0.740/0.697**，相比原图均值 0.893 持续退化。JPEG85/95 的部分 seed 压缩 FPR 达 8–9%。
+
+VAR/HMAR 是主要失效家族；JPEG50 时 VAR 已接近随机，LlamaGen/RAR 相对稳健。该协议只回答“原始训练与校准、压缩测试”的分布偏移，不与压缩校准或压缩训练混用。192 个 AUROC、96 个阈值和 768 个工作点已独立复算一致，见 `codec_matrix_audit.json`。
+
+
+## JPEG85 校准迁移与完整域适配
+
+三种协议已严格分开：原始训练/校准到压缩测试的 macro AUROC=0.767、FPR=6.33%；改用独立压缩 calibration 后 AUROC 不变、FPR=5.00%；完整压缩训练/选择/校准/测试后 macro=0.780、FPR=7.00%。
+
+因此，阈值偏移可以由压缩校准修复，但检测信号退化不能靠阈值解决。完整压缩训练对 VAR/HMAR 有有限恢复，对 RAR 还略降，不能作为全面鲁棒性证据。实现见 `analysis/dart_codec_calibration.py` 与 `analysis/dart_codec_full_adaptation.py`，16 个 AUROC、16 个阈值和 64 个工作点已独立复算一致。
