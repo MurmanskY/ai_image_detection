@@ -1496,3 +1496,97 @@ RAR 略降，不能声称全面恢复。
 两种适配协议共 16 个 AUROC、16 个 calibration 阈值和 64 个工作点均独立
 复算一致。当前结论是：压缩校准可修复 FPR 偏移，但无法恢复 VAR/HMAR 的
 检测信号；完整压缩训练也只有有限且不均衡的收益。项目测试：83 passed。
+
+
+## 34. Full DART 与 DART-LR 的严格 9-seed 配对比较
+
+实现与复核：`analysis/dart_family_p0.py`、`analysis/dart_full_lr_comparison.py`。
+两种特征在 Infinity、Janus、LlamaGen-XL、Switti 四折中使用完全相同的真实
+300/200/200/300 四划分、fake 100/50/100 划分、训练 seed、40 epochs、attention
+pooling、目标家族训练排除和参考模型排除，以及独立 conformal calibration。
+Full/L+R 的参数量分别为 1234/1202，差异仅为输入层去掉一个 quantization
+通道。以下 9 seeds 衡量同一数据池的划分与训练波动，不是 9 个独立数据集。
+
+| 模型 | macro AUROC（均值±标准差） | TPR@1%FPR | TPR@5%FPR | FPR 范围 |
+|---|---:|---:|---:|---:|
+| Full DART | 0.7854 ± 0.0243 | 0.0858 | 0.2242 | 2.33%–7.33% |
+| DART-LR | **0.7912 ± 0.0245** | **0.0878** | **0.2378** | 2.67%–8.33% |
+
+L+R−Full 的逐 seed macro 差均值为 **+0.00579**，seed 级 95% t 区间为
+[+0.00025,+0.01133]，paired t p=0.0425；但 Wilcoxon p=0.0547，只有 6/9
+个 seed 方向为正，逐图 paired bootstrap 也只有 3/9 个 seed 的 95%CI 完全
+大于零。因此目前证据是“L+R 有很小且依赖统计口径的优势”，不能声称稳定
+显著优于 Full，也不能忽略 L+R 在 seed 8 的 8.33% FPR。暂不替换主模型。
+
+`full_lr_paired_s0_8.json` 保存逐 seed、逐家族和逐图 bootstrap 结果；
+72 个 AUROC、72 个 calibration 阈值与 288 个 TPR 工作点均由 NPZ 独立
+复算一致。当前低 FPR 检出率仍弱，macro AUROC 的小幅差异不等于实用工作点
+已改善。
+
+
+## 35. 七家族跨数据集扩展：Full 保持优势，bank 覆盖非单调
+
+实现：`analysis/dart_external_family_p0.py`、`dart_external_family_summarize.py`、
+`dart_external_family_significance.py`、`dart_external_family_audit.py`。
+这是 **ARForensics 七家族示例子集（real=1000、每家族 fake=250）**，不是
+84k 全量评估。训练 fake 来自 DARG T2I；真实 reference/selection/calibration/test
+为 ARForensics 的固定 1000 张真实图，按 300/200/200/300 隔离；每家族 fake
+100 test。测试位置跨 seed 固定，seed 只改变训练/选择/校准，因此 seed 间不是
+独立数据集。重叠家族同时排除 DARG 训练 fake 与对应参考模型；Open-MAGVIT2、
+RAR、VAR 在 DARG T2I 训练 fake 和四个 T2I 参考模型中均不存在。
+
+### 35.1 最大严格可用 bank 的五 seed 结果
+
+| 目标家族 | Full AUROC | DART-LR AUROC | 同 bank PRADA | Full TPR@1%/5%FPR |
+|---|---:|---:|---:|---:|
+| Infinity | 0.9430 ± 0.0051 | **0.9467 ± 0.0029** | 0.8911 | 0.380 / 0.636 |
+| Janus-Pro | 0.9211 ± 0.0129 | **0.9273 ± 0.0134** | 0.8346 | 0.172 / 0.508 |
+| LlamaGen | 0.7712 ± 0.0043 | 0.7738 ± 0.0072 | 0.6837 | 0.076 / 0.264 |
+| Open-MAGVIT2 | **0.8285 ± 0.0147** | 0.8079 ± 0.0103 | 0.3399 | 0.052 / 0.236 |
+| RAR | **0.8104 ± 0.0241** | 0.7814 ± 0.0124 | 0.2688 | 0.068 / 0.182 |
+| Switti | **0.8390 ± 0.0077** | 0.8309 ± 0.0072 | 0.7973 | 0.222 / 0.380 |
+| VAR | **0.8057 ± 0.0149** | 0.7893 ± 0.0104 | 0.4554 | 0.046 / 0.166 |
+| **Macro（按 seed 均值±标准差）** | **0.8456 ± 0.0093** | 0.8368 ± 0.0063 | 0.6101 | 0.145 / 0.339 |
+
+Full−PRADA 的平均逐图 paired Δmacro AUROC 为 **+0.2354**，五个 seed 的
+bootstrap 95%CI 均大于零。但 PRADA 在严格缺失目标参考家族时明显变弱，尤其
+RAR/Open-MAGVIT2，因此该对比证明的是当前 missing-bank 协议下的增益，不是
+对所有场景的普遍优越。
+
+L+R−Full 为 **−0.00880**，seed 级 95% t CI [−0.01303,−0.00458]，5/5 seeds
+均为 Full 更高；每个 seed 的逐图 bootstrap CI 也都低于零。Wilcoxon 因仅 5
+个 seed 为 p=0.0625，不能把 seed 当作独立数据集夸大显著性。与第 34 节同分布
+四家族的小幅 L+R 优势合并看，**跨数据集证据支持保留 Full，不支持改用 L+R**
+。不过 L+R 的宏平均 TPR@1%/5%FPR 为 0.150/0.343，略高于 Full 的
+0.145/0.339，不能声称 Full 在低 FPR 工作点也更好。
+
+Full/L+R 的逐配置 FPR 范围分别为 0.67%–8.67%/0.67%–7.00%；仍有少数校准
+结果超过 7%，且 LlamaGen/VAR 等家族的低 FPR 检出率偏弱，外部泛化并未解决
+实用工作点问题。
+
+### 35.2 Model-bank coverage：规模有帮助，但组成比简单范式标签更重要
+
+coverage seeds 0–2 枚举每个目标严格可用模型的所有非空子集，Full 与 L+R
+使用相同数据、训练预算、max 聚合和独立真实校准。Full 的描述性汇总：
+
+| Bank size | 配置数 | 平均 AUROC |
+|---|---:|---:|
+| 1 | 72 | 0.778 |
+| 2 | 90 | 0.824 |
+| 3 | 48 | 0.832 |
+| 4 | 9 | 0.814 |
+
+该表混合了不同目标和可用 bank 大小，不能作为单调定律。逐家族趋势更有解释力：
+Infinity/Janus/LlamaGen 随 bank 增加总体上升；Open-MAGVIT2/RAR/VAR 从 1 到
+3 个参考模型明显改善，但完整 4-model bank 相比各自 3-model 均值分别下降
+0.004/0.001/0.008。即**覆盖通常有益，但 max 聚合下更多模型不一定更好**。
+
+简单“是否含相同生成范式”也不足以解释泛化：Full 在相同起始 bank 上加入
+同范式模型的平均 ΔAUROC=+0.028，加入不同范式模型反而为 +0.038；L+R 两者
+分别为 +0.026/+0.026。二元范式覆盖有混杂，不能宣称同范式模型更优。后续论文
+应强调 bank 大小、具体组成与聚合校准共同决定泛化，而非简单的 coverage 单调
+规律。
+
+最终审计覆盖 **233 个 target×seed×bank、699 个 AUROC、699 个阈值、699 个
+FPR、2796 个 TPR 工作点**，全部由逐图 NPZ 独立复算，最大绝对误差为 0。
+项目测试：**88 passed, 1 warning**。

@@ -141,3 +141,44 @@ VAR/HMAR 是主要失效家族；JPEG50 时 VAR 已接近随机，LlamaGen/RAR �
 三种协议已严格分开：原始训练/校准到压缩测试的 macro AUROC=0.767、FPR=6.33%；改用独立压缩 calibration 后 AUROC 不变、FPR=5.00%；完整压缩训练/选择/校准/测试后 macro=0.780、FPR=7.00%。
 
 因此，阈值偏移可以由压缩校准修复，但检测信号退化不能靠阈值解决。完整压缩训练对 VAR/HMAR 有有限恢复，对 RAR 还略降，不能作为全面鲁棒性证据。实现见 `analysis/dart_codec_calibration.py` 与 `analysis/dart_codec_full_adaptation.py`，16 个 AUROC、16 个阈值和 64 个工作点已独立复算一致。
+
+
+## Full DART 与 DART-LR 的严格配对复核
+
+在四家族严格排除协议上扩展至 seeds 0–8。两种模型共享数据、bank、训练预算、
+checkpoint 选择和独立校准；仅输入通道不同。Full/L+R 的 9-seed macro AUROC
+分别为 **0.7854/0.7912**，L+R−Full 均差 +0.00579。seed 级 t 区间刚好为正，
+但 Wilcoxon p=0.0547，且逐图 bootstrap 仅 3/9 seeds 的区间完全大于零。
+因此 L+R 仍是候选简化版本，不据此更换 Full 主模型。两者的 TPR@1%FPR 均值
+仅为 0.0858/0.0878，L+R 还出现一次 8.33% FPR，低误报风险没有解决。
+
+七家族外部复核采用 DARG fake 训练、ARForensics corrected test 独立真实
+校准/测试；重叠家族同时剔除训练 fake 与参考模型，Open-MAGVIT2、RAR、VAR
+作为 DARG T2I 和四个 T2I 参考模型均未覆盖的新家族。coverage 枚举所有非空
+bank 子集，并将 bank size 与独立定义的生成范式覆盖分开；RAR randomized
+order 和 Open-MAGVIT2 next-sub-token 不错误归为普通 raster。
+
+
+## 七家族跨数据集与 coverage 验证
+
+使用 DARG fake 训练和 ARForensics corrected test 的七家族示例子集进行外部复核；
+真实集按 300/200/200/300 严格拆分，测试图跨 seed 固定。重叠家族的训练 fake 与
+参考模型同时移除，Open-MAGVIT2/RAR/VAR 为当前 T2I 训练及参考 bank 未覆盖家族。
+
+五 seed 最大严格可用 bank 的 macro AUROC：Full **0.8456±0.0093**、L+R
+0.8368±0.0063、同 bank PRADA 0.6101。Full−PRADA 的逐图 paired 增益均值为
++0.2354，所有 seed 的 bootstrap CI 均为正；但 PRADA 在缺失目标参考家族时较弱，
+不能外推为普遍优于完整 bank PRADA。
+
+L+R−Full 均值为 −0.00880，5/5 seeds 都是 Full 更高，且每个 seed 的逐图
+bootstrap CI 均为负。结合同分布四家族结果，最终保留 Full，不采用 L+R 简化版。
+但 L+R 的宏平均 TPR@1%/5%FPR 略高，Full 并未改善所有低 FPR 工作点；逐配置
+FPR 仍有最高 8.67% 的情况。
+
+coverage 枚举显示，bank 从 1 增至 2/3 个模型通常提高 AUROC，但 4-model bank
+在 Open-MAGVIT2/RAR/VAR 上略低于其 3-model 均值。加入同范式与不同范式模型的
+配对增量也没有一致优劣。因此结论是：参考覆盖重要，但性能由 bank 大小、具体
+组成和 max 聚合共同决定，不存在当前证据支持的单调覆盖定律。
+
+全部 699 个 AUROC/阈值/FPR 和 2796 个 TPR 工作点已独立复算一致；测试为
+88 passed。结果仍是示例规模，不等于完整外部泛化证明。
