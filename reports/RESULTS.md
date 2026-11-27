@@ -1590,3 +1590,131 @@ Infinity/Janus/LlamaGen 随 bank 增加总体上升；Open-MAGVIT2/RAR/VAR 从 1
 最终审计覆盖 **233 个 target×seed×bank、699 个 AUROC、699 个阈值、699 个
 FPR、2796 个 TPR 工作点**，全部由逐图 NPZ 独立复算，最大绝对误差为 0。
 项目测试：**88 passed, 1 warning**。
+
+
+## 36. 来源混杂控制与 bank 聚合复核
+
+实现：`analysis/dart_source_control_p0.py`；审计：`analysis/dart_source_control_audit.py`。
+全部复用 Full DART 缓存，在七家族示例子集、seeds 0–4、固定测试位置下比较来源
+协议。目标 fake 与对应参考模型始终排除；真实归一化、checkpoint 和聚合选择不
+接触 calibration/test。每类来源平衡训练中，real/fake 均各含 ARF 与 DARG。
+
+| 训练/评估协议 | macro AUROC（5 seeds） | 相对当前均值 | 解释 |
+|---|---:|---:|---|
+| 当前：ARF real + DARG fake → ARF | 0.8456 ± 0.0093 | — | 原协议 |
+| ARF real + ARF 其他家族 fake → ARF | **0.8848 ± 0.0034** | +0.0392 | 同源训练更好 |
+| DARG real + DARG fake → ARF | 0.8434 ± 0.0116 | −0.0021 | 纯跨源迁移保持 |
+| ARF+DARG 平衡训练 → ARF | 0.8436 ± 0.0055 | −0.0019 | 平衡后来源结果保持 |
+| ARF 同源训练 → DARG 四家族 | 0.7249 ± 0.0106 | 不可直接比较 | 反向迁移；PRADA 0.7328 |
+| 来源平衡训练 → DARG 四家族 | 0.7728 ± 0.0113 | 不可直接比较 | PRADA 0.7328 |
+
+ARF 同源的逐图 paired 增量在五个 seed 上均为正；DARG 纯跨源和来源平衡相对当前
+的逐 seed CI 有正有负，均值差很小。因此没有证据表明当前 0.8456 主要由
+“real=ARF/fake=DARG”标签捷径造成；同时，同源训练明显更好，说明数据来源和训练
+覆盖仍是重要因素。以上仍是同一示例数据池的划分波动，不是独立数据集复证。
+
+### 36.1 聚合与低 FPR：事后改善不等于可部署收益
+
+在当前协议七家族五 seeds 上：
+
+| 聚合 | macro AUROC | TPR@1%FPR | TPR@5%FPR | FPR 最大值 |
+|---|---:|---:|---:|---:|
+| Max（原协议） | 0.8456 | 0.145 | 0.339 | 8.67% |
+| Mean | 0.8484 | **0.192** | **0.395** | **5.67%** |
+| Median | **0.8518** | 0.167 | 0.388 | 7.33% |
+| Validation-selected | 0.8470 | 0.144 | 0.344 | 8.67% |
+
+Mean/median 的事后结果优于 max，但 validation 选择器在 35 个 fold-seed 中
+33 次选择 max、2 次选择 mean，未自动获得上述收益。这说明按训练家族宏 AUROC
+选择聚合不能替代目标工作点验证，也不能事后把 mean/median 写成新主结果。当前
+仍保留 max 作为主协议；未来若要采用其他聚合，应预先注册并在新独立数据上验证。
+
+来源对照中部分 FPR 仍达 12%–13%，排序能力和校准稳定性没有因来源控制而自动
+解决。新增 NPZ 保存逐模型 real/fake bank 分数、所有聚合的 calibration/test 分数
+和阈值，可用于后续 score-correlation 与 false-negative 分析。
+
+审计覆盖 **180 个 fold-seed、900 个 AUROC、900 个阈值、3600 个 TPR 工作点**，
+全部一致；当前协议相对第 35 节既有结果的最大 AUROC 复现误差为 **0**。
+
+
+## 37. Generation-cycle interaction 与条件一致性残差验证
+
+实现：`analysis/dart_interaction.py`、`dart_interaction_p0.py`、
+`dart_interaction_reconstruct.py`、`dart_interaction_audit.py`。
+候选检测器均通过零填充固定为 **1394 个参数**，优化预算、数据划分、bank 和
+calibration 完全一致。Cycle residual 使用 `E[R|L,Q,scale metadata]` 的 ridge
+条件预测器，仅用真实 reference 拟合，真实 selection 只用于残差尺度。
+
+### 37.1 Feature fusion vs. explicit interaction：P0 结果
+
+| 方法 | DARG 四家族 macro | ARF 七家族 macro |
+|---|---:|---:|
+| L+R | 0.7662 | 0.8444 |
+| Full | 0.7689 | 0.8503 |
+| 显式 L+R interaction | 0.7669 | 0.8438 |
+| 显式 Full interaction | 0.7627 | 0.8473 |
+| L+R + cycle residual | **0.7718** | **0.8538** |
+
+显式交互相对对应融合模型没有稳定增益，两个交互 GO 均为 false，停止该网络扩展。
+L+R+residual 相对 L+R 的 ARF 平均 ΔAUROC=**+0.00944**，3/3 seeds 的逐图
+paired CI 均为正，TPR@5% 非劣且最大 FPR=6%，预注册 GO=true。这是候选信号
+继续验证的依据，不是替换主模型的充分条件。
+
+### 37.2 Raw residual 的 9-seed 来源与低 FPR 验证
+
+实现：`analysis/dart_cycle_validation.py`、`dart_cycle_validation_reconstruct.py`、
+`dart_cycle_validation_audit.py`。不训练检测头，直接聚合逐图条件残差。
+
+| 来源协议 / 测试 | Max macro AUROC | TPR@1%/5%FPR | FPR 范围 |
+|---|---:|---:|---:|
+| 当前 real=ARF → ARF | 0.8768 ± 0.0048 | 0.180 / 0.417 | 2.33%–7.00% |
+| DARG real/fake → ARF | **0.8827 ± 0.0021** | 0.239 / 0.435 | 1.67%–7.67% |
+| ARF+DARG → ARF | 0.8814 ± 0.0024 | 0.208 / 0.429 | 1.67%–8.00% |
+| DARG → DARG 四家族 | 0.7186 ± 0.0124 | 0.025 / 0.149 | 3.67%–12.00% |
+| 来源平衡 → DARG 四家族 | 0.7249 ± 0.0071 | 0.024 / 0.147 | 4.00%–10.67% |
+
+Raw residual 相对 P0 Full 的 paired ΔAUROC=+0.0236，3/3 seeds CI 均为正；
+相对 L+R 为 +0.0295。Mean 聚合相对 Full 为 +0.0300。该信号在三个真实来源
+协议下保持宏 AUROC，但 DARG 测试的低 FPR 与 FPR 校准明显较弱。
+
+真实 selection 上的条件预测 R² 均值仅：current 0.127、DARG 0.152、balanced
+0.156，Infinity 接近零。故不能仅凭 AUROC 就声称强条件依赖，必须做同尺度分解。
+
+### 37.3 R / R̂ / R−R̂ 分解：residual 确有独立增量
+
+实现：`analysis/dart_cycle_decomposition.py` 与对应 audit。R、R̂ 和 residual
+共享真实 selection 尺度、相同聚合和独立校准。
+
+| 聚合 | 原始 R | 条件预测 R̂ | Residual | Residual−R |
+|---|---:|---:|---:|---:|
+| Max | 0.8590 | 0.5961 | **0.8768** | **+0.0179** |
+| Mean | 0.8485 | 0.5891 | **0.8802** | **+0.0318** |
+| Median | 0.8463 | 0.5857 | **0.8770** | **+0.0307** |
+
+三种聚合下 residual 相对 R 的逐图 paired CI 在 **9/9 seeds 均为正**。
+R̂ 单独较弱，说明收益来自实际 reconstruction 与条件预期的偏差，而非只使用
+原始 R。这是目前最有依据的新候选取证信号，但条件 R² 低表明它不能简单解释为
+已经确认的强生成定律。
+
+### 37.4 跨 codec 与 ImageNet-V2：有失效边界，不替换 Full
+
+实现：`analysis/dart_cycle_robustness.py` 与对应 audit。C2I 原始真实
+reference/selection/calibration 固定，压缩只作用于测试，不重调阈值。
+
+| 测试域 | 原始 R（max） | Residual（max） | 配对 residual−R |
+|---|---:|---:|---:|
+| Original | 0.8073 | **0.9022** | +0.0951，3/3 CI>0 |
+| JPEG95 | 0.7620 | **0.8571** | +0.0949，3/3 CI>0 |
+| JPEG85 | 0.7113 | **0.7908** | +0.0794，3/3 CI>0 |
+| JPEG75 | 0.6722 | **0.7398** | +0.0675，3/3 CI>0 |
+| JPEG50 | 0.6335 | **0.6830** | +0.0496，3/3 CI>0 |
+
+Residual 在 max 下随压缩稳定退化，并非 codec-invariant；在 mean/median 下
+甚至低于 R，说明增益依赖聚合。ImageNet-V2 外部真实 FPR 为 max 8.0%–9.67%、
+mean 6.0%–11.0%、median 7.0%–10.67%，Wilson 上界超过 11%，不能声称外部
+校准保证。当前结论是：**cycle residual 值得作为后续候选信号，但 Full DART
+仍是主模型；在更大独立数据、跨来源校准和低 FPR 问题解决前，不升级主方法。**
+
+审计：交互 P0 363 个 AUROC/阈值、1452 个 TPR；raw residual 783 个
+AUROC/阈值、3132 个 TPR；分解 567 个 AUROC/阈值、2268 个 TPR；稳健性
+360 个 AUROC/阈值、1440 个 TPR 与 18 个外部 FPR，全部独立复算一致。

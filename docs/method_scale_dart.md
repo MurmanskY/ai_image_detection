@@ -182,3 +182,37 @@ coverage 枚举显示，bank 从 1 增至 2/3 个模型通常提高 AUROC，但 
 
 全部 699 个 AUROC/阈值/FPR 和 2796 个 TPR 工作点已独立复算一致；测试为
 88 passed。结果仍是示例规模，不等于完整外部泛化证明。
+
+
+## 来源混杂与聚合协议复核
+
+七家族缓存特征上完成四种来源控制：当前 ARF-real/DARG-fake、ARF 同源、DARG→ARF
+纯跨源和 ARF+DARG 来源平衡。对应 ARF macro AUROC 分别为
+**0.8456/0.8848/0.8434/0.8436**。ARF 同源显著更高，其他两种与当前接近，故没有
+证据表明当前结果主要由来源标签捷径造成；但同源增益说明训练来源覆盖仍重要。
+反向 ARF→DARG 与平衡→DARG 分别为 0.7249/0.7728，同协议 PRADA 为 0.7328。
+
+Mean/median 在当前协议的事后 AUROC 和低 FPR 指标优于 max，但 validation 选择器
+大多仍选 max，未自动获得这些收益。因此保留 max 主协议，不做事后替换。新增逐模型
+bank 归档支持 score-correlation 与 false-negative 分析。180 个 fold-seed 的
+900 个 AUROC/阈值及 3600 个 TPR 工作点独立复算一致，当前协议与此前结果完全
+复现。
+
+
+## Generation-cycle interaction 与 cycle residual
+
+严格参数匹配的 P0 表明，显式 L+R/Full 交互没有稳定超过对应融合模型，停止该
+网络扩展。L+R+条件残差相对 L+R 在 ARF 七家族上提升 +0.00944，3/3 seeds
+配对 CI 为正，通过预注册 GO，但仍只是候选信号。
+
+Raw residual 在 9 seeds 下的 current/DARG→ARF/balanced→ARF macro AUROC 为
+0.8768/0.8827/0.8814；相对 P0 Full 的 paired 增益为 +0.0236。真实条件预测
+R² 较低，因此进一步做同尺度 R/R̂/residual 分解。Residual 相对原始 R 在
+max/mean/median 下分别提升 +0.0179/+0.0318/+0.0307，且 9/9 seeds 的逐图 CI
+均为正；R̂ 单独仅约 0.59。这支持“实际 reconstruction 偏离条件预期”含有独立
+信息，而不是简单复用 R。
+
+但跨 codec 仍持续退化：C2I max residual 在 original/JPEG95/85/75/50 分别为
+0.9022/0.8571/0.7908/0.7398/0.6830。ImageNet-V2 外部真实 FPR 达 8%–11%，
+mean/median 下 residual 还可能弱于 R。因此 Full DART 继续保持主模型；cycle
+residual 仅作为有独立证据的候选信号，不宣称通用、压缩不变或外部校准保证。
