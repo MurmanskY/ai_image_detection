@@ -94,7 +94,7 @@ def prada_score(features, model):
                 input_dim=1, learnable_difference=True,
                 learnable_stage_weights=True, training_noise=0.1)
     net.load_state_dict(torch.load(os.path.join(
-        WEIGHT_DIR, model, "final.pt"), weights_only=True))
+        WEIGHT_DIR, model, "final.pt"), map_location="cpu", weights_only=True))
     net.eval()
     with torch.no_grad():
         return net(stacked).numpy()

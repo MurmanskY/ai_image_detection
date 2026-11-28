@@ -1718,3 +1718,42 @@ mean 6.0%–11.0%、median 7.0%–10.67%，Wilson 上界超过 11%，不能声�
 审计：交互 P0 363 个 AUROC/阈值、1452 个 TPR；raw residual 783 个
 AUROC/阈值、3132 个 TPR；分解 567 个 AUROC/阈值、2268 个 TPR；稳健性
 360 个 AUROC/阈值、1440 个 TPR 与 18 个外部 FPR，全部独立复算一致。
+
+
+## 38. Full+residual 与外部独立校准：明确最终方法边界
+
+### 38.1 Full+residual 不具有一致增量
+
+实现：`analysis/dart_full_residual_comparison.py` 与对应 audit。Full 和
+Full+residual 均固定为 1394 个检测器参数，五 seeds、相同划分、训练预算和校准。
+
+| 协议 | Full | Full+residual | 平均 paired Δ |
+|---|---:|---:|---:|
+| DARG 四家族 | 0.7675 ± 0.0094 | **0.7755 ± 0.0099** | +0.0080 |
+| ARF 七家族 | **0.8444 ± 0.0100** | 0.8425 ± 0.0083 | −0.0020 |
+
+DARG 的 5 个 seed 中 4 个 paired CI 为正；ARF 中 3 个 seed 显著为负、1 个显著
+为正、1 个跨零。ARF 的 TPR@5% 从 0.3426 降至 0.3357，预注册 GO=false。
+因此 residual 不是 Full 的通用附加通道，不应通过堆叠方式升级主模型。后续研究应
+把 raw residual 作为独立方法与 Full 监督融合基线比较。
+
+### 38.2 ImageNet-V2 外部 calibration/test 严格分离
+
+实现：`analysis/dart_external_calibration.py` 与对应 audit。将 300 张外部真实图
+分为 150 calibration/150 test，条件模型和特征完全冻结，只重新估计 conformal
+阈值。3 个原模型 seed × 5 个外部划分用于评估校准波动，不视为独立数据集。
+
+| 方法 | 原阈值外部 FPR 均值 | 外部再校准 FPR 均值 | 再校准 macro AUROC |
+|---|---:|---:|---:|
+| R，max | 7.91% | 6.04% | 0.7913 |
+| Residual，max | 9.60% | **5.29%** | **0.8848** |
+| Residual，mean | 9.42% | 5.91% | 0.7199 |
+| Residual，median | 9.29% | 6.09% | 0.6088 |
+
+Max residual 的再校准 FPR 在划分间为 1.33%–10.0%，小校准集仍有波动；所有
+AUROC 在重校准前后完全一致。结论仅限于：**给定独立同来源外部 calibration，
+阈值迁移可以修复；不能声称零样本外部校准保证。** Mean/median 的外部 AUROC
+明显较差，再次确认聚合依赖。
+
+新增审计：Full+residual 220 个 AUROC/阈值和 880 个 TPR；外部校准 90 个
+条目、180 个 FPR 和 720 个 AUROC，均独立复算通过。

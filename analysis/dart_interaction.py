@@ -77,7 +77,7 @@ class CycleResidualizer:
 
 
 def transform_images(images, mode, residualizer=None):
-    if mode not in METHODS:
+    if mode not in METHODS + ("full_cycle",):
         raise ValueError(f"unknown interaction method: {mode}")
     output = []
     for image in images:
@@ -90,15 +90,15 @@ def transform_images(images, mode, residualizer=None):
             base = select_feature_mode([image], "likelihood_reconstruction")[0]
             interaction = np.stack([mean_l * rec, std_l * rec], axis=1)
             base = np.concatenate([base, interaction], axis=1)
-        elif mode in ("full", "full_interaction"):
+        elif mode in ("full", "full_interaction", "full_cycle"):
             base = image
             if mode == "full_interaction":
                 interaction = np.stack([mean_l * rec, std_l * rec, mean_l * quant,
                                         std_l * quant, quant * rec], axis=1)
                 base = np.concatenate([base, interaction], axis=1)
-        if mode == "lr_cycle":
+        if mode in ("lr_cycle", "full_cycle"):
             if residualizer is None:
-                raise ValueError("lr_cycle requires a fitted residualizer")
+                raise ValueError(f"{mode} requires a fitted residualizer")
             residual = residualizer.residual([image])
             base = np.concatenate([base, residual[:, None]], axis=1)
         output.append(np.asarray(base, dtype=np.float32))

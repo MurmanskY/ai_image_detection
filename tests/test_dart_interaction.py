@@ -53,3 +53,17 @@ def test_cycle_residual_is_conditional_and_scaled():
     assert residualizer.selection_r2 > 0.99
     assert np.allclose(predicted, actual, atol=1e-2)
     assert residualizer.residual(real[100:]).shape == (100,)
+
+
+def test_unregularized_cycle_residual_satisfies_normal_equations():
+    rng = np.random.RandomState(0)
+    real = []
+    for _ in range(100):
+        image = np.zeros((1, 20), dtype=np.float32)
+        image[0, :19] = rng.normal(size=19)
+        image[0, 19] = rng.normal()
+        real.append(image)
+    residualizer = CycleResidualizer(ridge=0).fit(real[:80], real[80:])
+    x, y = residualizer.design(real[:80])
+    residual = y - x @ residualizer.coef
+    assert np.allclose(x.T @ residual, 0, atol=1e-8)

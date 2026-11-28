@@ -74,7 +74,7 @@ def evaluate_fold(protocol, target, seed, arf, darg):
             "seeds": {str(seed): {}}}
     for method in METHODS:
         residualizers = fit_residualizers(data, bank, sources, ref_idx, select_idx) \
-            if method == "lr_cycle" else None
+            if method in ("lr_cycle", "full_cycle") else None
         transformed = {}
         for model in bank:
             transformed[model] = {key: transform_images(images, method,
